@@ -11,8 +11,8 @@ KEY_ITERATABLE = "iteratable"
 KEY_EXPECTED_STATUS = "expected_statuses"
 KEY_LABEL = "label"
 KEY_FUNCTION = "call_function_name"
-KEY_VALUE "value"
-KEY_SECOND "second"
+KEY_VALUE = "value"
+KEY_SECOND = "second"
 
 #入力可能なキーと、Operation_Coreクラスのメンバ変数の対応一覧
 OPERATION_KEY_REF_DICT = {
@@ -51,8 +51,9 @@ IS_LISTABLE_KEY_DICT = {
 def valid_action(action):
     usable_actions =  ["SELECT","CLICK","DRAG","CALL","LOOP","INPUT","WAIT","RCLICK","DBLCLICK","UPLOAD"]
     is_usable = False
+    uppered_action = action.upper()
     for usable_action in usable_actions:
-        if action == usable_action:
+        if uppered_action == usable_action:
             is_usable = True
             break
     return is_usable
@@ -82,6 +83,8 @@ def is_int(value):
     try:
         int(value)
         is_int = True
+    except:
+        is_int = False
     return is_int
 
 #関数への参照を持つので、それぞれ引数を渡して実行
@@ -121,8 +124,8 @@ class Operation_Core:
 
         self._set_keys(operation_dict)
 
-    def set_keys(self,operation_dict):
-        if isinstance(operation_dict,dict):
+    def _set_keys(self,operation_dict):
+        if not isinstance(operation_dict,dict):
             raise ValueError(f"Operation_Core._set_keys failed : operation_dict is not dict class.")
         for key in operation_dict.keys():
             uppered_name = key.upper()
@@ -134,11 +137,11 @@ class Operation_Core:
                 tmp_value = operation_dict[key]
                 #メンバ変数名に対応したvalidation関数を格納したdictから、validation関数を取り出して実行
                 if not KEY_VALUES_VALID_FUNC_DICT[tmp_member_name](tmp_value):
-                    raise ValueError(f"validation failed.")
-                if member_name  in IS_LISTABLE_KEY_DICT:
-                    self.__setattr__(OPERATION_KEY_REF_DICT[uppered_name],tmp_value if isinstance(tmp_value,list) else [tmp_value])
+                    raise ValueError(f"Validation failed.KEY = " + tmp_member_name  +  " value = " + str(tmp_value))
+                if tmp_member_name  in IS_LISTABLE_KEY_DICT:
+                    self.__setattr__("_" + OPERATION_KEY_REF_DICT[uppered_name],tmp_value if isinstance(tmp_value,list) else [tmp_value])
                 else:
-                    self.__setattr__(OPERATION_KEY_REF_DICT[uppered_name],operation_dict[key])
+                    self.__setattr__("_" + OPERATION_KEY_REF_DICT[uppered_name],operation_dict[key])
 
     @property
     def executable_operation(self):
@@ -163,13 +166,6 @@ class Operation_Core:
     @property
     def call_function_name(self):
         return self._call_function_name
-
-    def __repr__(self):
-        self_dict = self.__dict__
-        string = "Operation_core\n"
-        for key,val in self_dict.items():
-            string += key + " = " + str(val) + "\n"
-        return string
 
 class Operation:
     @property
@@ -249,21 +245,6 @@ class Operation:
         elif   isinstance(object_list ,list) and object_list.len > 0:    
             raise ValueError(f'Object_list is not correct.')
 
-    def __repr__(self):
-        self_dict = self.__dict__
-        string = "Operation\n"
-        ope_core = ""
-        for key,val in self_dict.items():
-            if key == "_operation_core":
-                ope_core =   self._operation_core.__repr__()
-                continue
-            string += key + " = " + str(val) + "\n"
-
-        #インデント一個一個下げてみる
-        string += ope_core.replace("\n","\n\t")
-        return string
-
-
 class Operation_List:
     def __init__(self):
         self._operation_list = []
@@ -307,24 +288,6 @@ class Operation_List:
         
         #indexを返す
         return len(self.operation_list) - 1
-
-    def __repr__(self):
-        self_dict = self.__dict__
-        string = "Operation_List\n"
-        ope = ""
-        for key,val in self_dict.items():
-    #        if key == "_operation_list":
-    #            ope_idx = 0
-    #            for operation in val:
-    #                ope += "operation" + str(ope_idx) +  "\n"
-    #                ope +=  operation.__repr__()
-    #                ope_idx = ope_idx + 1
-    #            continue
-            string += key + " = " + str(val) + "\n"
-
-    #   string += ope.replace("\t","|----")
-        return string
-
 
 #Superset of Operation_List
 class Function(Operation_List):
@@ -386,7 +349,7 @@ class Pattern():
         return self._operations_list[self._current_progress]
 
 def print_class_members(self):
-    string = str(type(self)) + "\n"
+    string = "Hi! My name is " + str(type(self)) + "! not Slim Shady.\n"
     self_dict = self.__dict__
 
     lists = ""
