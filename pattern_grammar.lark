@@ -1,0 +1,9 @@
+RE_exprssion  : simple_RE | RE_exprssion simple_RE
+simple_RE : nondupl_RE | nondupl_RE RE_dulp_symbol
+nondupl_RE : Fname_Chars | Back_open_paren Pname_Chars Back_close_paren
+RE_dupl_symbol : Back_open_brace DUP_COUNT Back_close_brace | Back_open_brace "," DUP_COUNT Back_close_brace | Back_open_brace DUP_COUNT "," DUP_COUNT Back_close_brace
+Pname_Chars : /[a-zA-Z0-9_]{1,30}/
+Back_open_paren : "("
+Back_close_paren : ")"
+Back_brace_paren : "{"
+Back_close_paren : "}"
