@@ -1,0 +1,23 @@
+    #なんか、思ったけどやっぱfunction classは自分の子要素にあたるfunctionを、再帰的にinstance化する
+    #べきなのかなあってね、思ったんですけど、function classが、astのレベルで管理しているものにアクセスできるのはおかしいなと。権限の問題。
+    def _bkmake_function_instance(self,target_function):
+        if not  isinstance(target_function,operation_elements.Function):
+            return None
+        func_stack = []
+        progress_stack = []
+        current_proress = 0
+        current_func = target_function
+        current_operation = None
+        func_stack.append(target_function)
+        progress_stack.append(current_proress)
+
+        while len(func_stack) > 0:
+            if current_proress >= len(current_func.caller_operations):
+                current_func = func_stack.pop()
+                current_proress = progress_stack.pop()
+                if 
+            current_proress = current_proress + 1
+            current_operation =  current_func.caller_operations[current_progress]
+            if current_func.func_name
+                current_func.child_operation_list = self._get_function(current_operation.func_name)
+

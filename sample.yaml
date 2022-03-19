@@ -1,0 +1,12 @@
+- I: "yahoo"
+- A: click
+  O: "検索"
+- A: click
+
+
+
+
+- A: click
+  O: check1
+-A: click
+  O:  {O: check2,place: before}

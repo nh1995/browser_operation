@@ -1,0 +1,33 @@
+<html>
+    <head>
+        <style>
+            .red_color { color : red  }
+        </style>
+    </head>
+    <body>
+        <form>
+            <input type="button" value="test1">
+            <select>
+                <option value="0">option1</option>
+                <option value="1">option2</option>
+            </select>
+            <div class="red_color" id="red">
+            checkbox<input type="checkbox" id="check" value="check1">
+            </div>
+            <input type="radio" name="radio1">radio1
+            <input type="radio" name="radio1">radio2
+        </form>
+        <script>
+            check = document.getElementById("check");
+            div = document.getElementById("red");
+            check.addEventListener("click",function(){
+                if(red.className === "red_color"){
+                    red.className = "";
+                }else{
+                    red.className = "red_color";
+                }
+
+            });
+        </script>
+    </body>
+</html>
