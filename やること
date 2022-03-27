@@ -1,19 +1,12 @@
-#まあだいたいできたからいいとする
-#・デバッグ用に、__repr__メソッドの定義
-・operationとoperation_coreのプロパティセット、ゲットの設定
+・action "dblclick" "rclick" "wait" とか諸々ついか　あとでいいけど
 ・make_function_instanceの無限ループ対策
-頑張れば今日ここまでできるかな…
-・patternの作成（クラス化する？それとも、functionでやっちゃう? つまり、function a b a b と呼ぶfunction）
-    たしかに、じゃあpatternはfunctionのsupersetだとして、あんまりfunctionと別のプロパティとかいらないもんな
-    でも、考えてみたら今回のloopはAB 次は BAの順番でやる、とかになるから、だめか。シンプルにfunctionのみでは実現できんのでは。
-    ていうかそう考えると、loopをchildにもつoperationが、ABならAをもつのとBを持つので2つOperationが必要。
-    考えてみたらPatternてOperation_Listのlistになるわ…。こらfunctionとかとは全く別の構造体になるね。
-    これちゃんと考えないとだめだな
+・patternの作成（クラス化する）
+    だってそこやればある程度動かせるじゃん。そこできたら、runtimeとmain_routine作って、ある程度動かせる状態にまで持ってこう。
+    そっから諸々落ち穂拾いですよ。
 ・runtimeの作成
-ここは今週の平日のうちにやれたら最高すぎる…
 ・main_routineの作成（ついにブラウザ操作ライブラリを使うタイミングが…！）
 ・yamlの受け取り
-ここまでを来週の月曜中に終わらせたい…できなくても再来週の休日中には…！
+ここまでを3/21中に終わらせたい…できなくても再来週の休日中には…！
 ・リファクタリング
 ・テストの作成
 ・READMEのさくせい

@@ -1,9 +1,21 @@
-RE_exprssion  : simple_RE | RE_exprssion simple_RE
-simple_RE : nondupl_RE | nondupl_RE RE_dulp_symbol
-nondupl_RE : Fname_Chars | Back_open_paren Pname_Chars Back_close_paren
-RE_dupl_symbol : Back_open_brace DUP_COUNT Back_close_brace | Back_open_brace "," DUP_COUNT Back_close_brace | Back_open_brace DUP_COUNT "," DUP_COUNT Back_close_brace
-Pname_Chars : /[a-zA-Z0-9_]{1,30}/
-Back_open_paren : "("
-Back_close_paren : ")"
-Back_brace_paren : "{"
-Back_close_paren : "}"
+//This is poor regex(Extended Regular Expression) parser.
+//Arrangement from IEEEE ERE definition.
+//Almost of these rule names also inherited from that definition but added "p" as prefix standing for "poor".
+pextended_reg_exp  : pere_branch
+    | pextended_reg_exp "|" pere_branch
+pere_branch : pere_expression
+    | pere_branch " " pere_expression
+pere_expression : pname_chars
+    | pere_expression pere_dupl_symbol
+    | "(" pextended_reg_exp  ")"
+pere_dupl_symbol : "{" dup_count_max "}"
+    //{1,} Maximum number could not be empty.Cos it's impossible that repeating something infinite times.
+    | "{" dup_count_min "," dup_count_max "}"
+//Pattern name chars.
+pname_chars : /[a-zA-Z0-9_]{1,30}/
+//back_open_paren : "("
+//back_close_paren : ")"
+//back_open_brace : "{"
+//back_close_brace : "}"
+dup_count_max : /[1-9]([0-9]+){0,}/
+dup_count_min : /(0|[1-9]([0-9]+){0,})/

@@ -1,0 +1,236 @@
+ 9.5 Regular Expression Grammar
+
+Grammars describing the syntax of both basic and extended regular expressions are presented in this section. The grammar takes precedence over the text. See the Shell and Utilities volume of IEEE Std 1003.1-2001, Section 1.10, Grammar Conventions.
+9.5.1 BRE/ERE Grammar Lexical Conventions
+
+The lexical conventions for regular expressions are as described in this section.
+
+Except as noted, the longest possible token or delimiter beginning at a given point is recognized.
+
+The following tokens are processed (in addition to those string constants shown in the grammar):
+
+COLL_ELEM_SINGLE
+    Any single-character collating element, unless it is a META_CHAR.
+COLL_ELEM_MULTI
+    Any multi-character collating element.
+BACKREF
+    Applicable only to basic regular expressions. The character string consisting of '\' followed by a single-digit numeral, '1' to '9'.
+DUP_COUNT
+    Represents a numeric constant. It shall be an integer in the range 0 <= DUP_COUNT <= {RE_DUP_MAX}. This token is only recognized when the context of the grammar requires it. At all other times, digits not preceded by '\' are treated as ORD_CHAR.
+META_CHAR
+    One of the characters:
+
+    ^
+        When found first in a bracket expression
+    -
+        When found anywhere but first (after an initial '^', if any) or last in a bracket expression, or as the ending range point in a range expression
+    ]
+        When found anywhere but first (after an initial '^', if any) in a bracket expression
+
+L_ANCHOR
+    Applicable only to basic regular expressions. The character '^' when it appears as the first character of a basic regular expression and when not QUOTED_CHAR. The '^' may be recognized as an anchor elsewhere; see BRE Expression Anchoring.
+ORD_CHAR
+    A character, other than one of the special characters in SPEC_CHAR.
+QUOTED_CHAR
+    In a BRE, one of the character sequences:
+
+        \^    \.   \*    \[    \$    \\
+
+    In an ERE, one of the character sequences:
+
+        \^    \.    \[    \$    \(    \)    \|
+        \*    \+    \?    \{    \\
+
+R_ANCHOR
+    (Applicable only to basic regular expressions.) The character '$' when it appears as the last character of a basic regular expression and when not QUOTED_CHAR. The '$' may be recognized as an anchor elsewhere; see BRE Expression Anchoring.
+SPEC_CHAR
+    For basic regular expressions, one of the following special characters:
+
+    .
+        Anywhere outside bracket expressions
+    \
+        Anywhere outside bracket expressions
+    [
+        Anywhere outside bracket expressions
+    ^
+        When used as an anchor (see BRE Expression Anchoring) or when first in a bracket expression
+    $
+        When used as an anchor
+    *
+        Anywhere except first in an entire RE, anywhere in a bracket expression, directly following "\(", directly following an anchoring '^'
+
+    For extended regular expressions, shall be one of the following special characters found anywhere outside bracket expressions:
+
+        ^    .    [    $    (    )    |
+        *    +    ?    {    \
+
+    (The close-parenthesis shall be considered special in this context only if matched with a preceding open-parenthesis.)
+
+9.5.2 RE and Bracket Expression Grammar
+
+This section presents the grammar for basic regular expressions, including the bracket expression grammar that is common to both BREs and EREs.
+
+%token    ORD_CHAR QUOTED_CHAR DUP_COUNT
+
+
+%token    BACKREF L_ANCHOR R_ANCHOR
+
+
+%token    Back_open_paren  Back_close_paren
+/*          '\('             '\)'        */
+
+
+%token    Back_open_brace  Back_close_brace
+/*          '\{'             '\}'         */
+
+
+/* The following tokens are for the Bracket Expression
+   grammar common to both REs and EREs. */
+
+
+%token    COLL_ELEM_SINGLE COLL_ELEM_MULTI META_CHAR
+
+
+%token    Open_equal Equal_close Open_dot Dot_close Open_colon Colon_close
+/*           '[='       '=]'        '[.'     '.]'      '[:'       ':]'  */
+
+
+%token    class_name
+/* class_name is a keyword to the LC_CTYPE locale category */
+/* (representing a character class) in the current locale */
+/* and is only recognized between [: and :] */
+
+
+%start    basic_reg_exp
+%%
+
+
+/* --------------------------------------------
+   Basic Regular Expression
+   --------------------------------------------
+*/
+basic_reg_exp  :          RE_expression
+               | L_ANCHOR
+               |                        R_ANCHOR
+               | L_ANCHOR               R_ANCHOR
+               | L_ANCHOR RE_expression
+               |          RE_expression R_ANCHOR
+               | L_ANCHOR RE_expression R_ANCHOR
+               ;
+RE_expression  :               simple_RE
+               | RE_expression simple_RE
+               ;
+simple_RE      : nondupl_RE
+               | nondupl_RE RE_dupl_symbol
+               ;
+nondupl_RE     : one_char_or_coll_elem_RE
+               | Back_open_paren RE_expression Back_close_paren
+               | BACKREF
+               ;
+one_char_or_coll_elem_RE : ORD_CHAR
+               | QUOTED_CHAR
+               | '.'
+               | bracket_expression
+               ;
+RE_dupl_symbol : '*'
+               | Back_open_brace DUP_COUNT               Back_close_brace
+               | Back_open_brace DUP_COUNT ','           Back_close_brace
+               | Back_open_brace DUP_COUNT ',' DUP_COUNT Back_close_brace
+               ;
+
+
+/* --------------------------------------------
+   Bracket Expression
+   -------------------------------------------
+*/
+bracket_expression : '[' matching_list ']'
+               | '[' nonmatching_list ']'
+               ;
+matching_list  : bracket_list
+               ;
+nonmatching_list : '^' bracket_list
+               ;
+bracket_list   : follow_list
+               | follow_list '-'
+               ;
+follow_list    :             expression_term
+               | follow_list expression_term
+               ;
+expression_term : single_expression
+               | range_expression
+               ;
+single_expression : end_range
+               | character_class
+               | equivalence_class
+               ;
+range_expression : start_range end_range
+               | start_range '-'
+               ;
+start_range    : end_range '-'
+               ;
+end_range      : COLL_ELEM_SINGLE
+               | collating_symbol
+               ;
+collating_symbol : Open_dot COLL_ELEM_SINGLE Dot_close
+               | Open_dot COLL_ELEM_MULTI Dot_close
+               | Open_dot META_CHAR Dot_close
+               ;
+equivalence_class : Open_equal COLL_ELEM_SINGLE Equal_close
+               | Open_equal COLL_ELEM_MULTI Equal_close
+               ;
+character_class : Open_colon class_name Colon_close
+               ;
+
+The BRE grammar does not permit L_ANCHOR or R_ANCHOR inside "\(" and "\)" (which implies that '^' and '$' are ordinary characters). This reflects the semantic limits on the application, as noted in BRE Expression Anchoring. Implementations are permitted to extend the language to interpret '^' and '$' as anchors in these locations, and as such, conforming applications cannot use unescaped '^' and '$' in positions inside "\(" and "\)" that might be interpreted as anchors.
+9.5.3 ERE Grammar
+
+This section presents the grammar for extended regular expressions, excluding the bracket expression grammar.
+
+Note:
+    The bracket expression grammar and the associated %token lines are identical between BREs and EREs. It has been omitted from the ERE section to avoid unnecessary editorial duplication.
+
+%token  ORD_CHAR QUOTED_CHAR DUP_COUNT
+%start  extended_reg_exp
+%%
+
+
+/* --------------------------------------------
+   Extended Regular Expression
+   --------------------------------------------
+*/
+extended_reg_exp   :                      ERE_branch
+                   | extended_reg_exp '|' ERE_branch
+                   ;
+ERE_branch         :            ERE_expression
+                   | ERE_branch ERE_expression
+                   ;
+ERE_expression     : one_char_or_coll_elem_ERE
+                   | '^'
+                   | '$'
+                   | '(' extended_reg_exp ')'
+                   | ERE_expression ERE_dupl_symbol
+                   ;
+one_char_or_coll_elem_ERE  : ORD_CHAR
+                   | QUOTED_CHAR
+                   | '.'
+                   | bracket_expression
+                   ;
+ERE_dupl_symbol    : '*'
+                   | '+'
+                   | '?'
+                   | '{' DUP_COUNT               '}'
+                   | '{' DUP_COUNT ','           '}'
+                   | '{' DUP_COUNT ',' DUP_COUNT '}'
+                   ;
+
+The ERE grammar does not permit several constructs that previous sections specify as having undefined results:
+
+    ORD_CHAR preceded by '\'
+
+    One or more ERE_dupl_symbols appearing first in an ERE, or immediately following '|', '^', or '('
+
+    '{' not part of a valid ERE_dupl_symbol
+
+    '|' appearing first or last in an ERE, or immediately following '|' or '(', or immediately preceding ')'
+
+Implementations are permitted to extend the language to allow these. Conforming applications cannot use such constructs.
