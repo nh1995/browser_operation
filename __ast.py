@@ -4,8 +4,8 @@ import operation_elements,yaml
 class AST:
     def __init__(self,yml_obj):
         self._yaml_operation_file = yml_obj
-        self._function_list = []
         self._operation_main = operation_elements.Operation_List()
+        self._function_list = []
         self._pattern_list = []
     
     def _register_functions(self):
@@ -35,6 +35,35 @@ class AST:
     
         return registered_function_num
 
+    def _register_patterns(self):
+        registered_pattern_num = 0
+        patterns = self._yaml_operation_file["Patterns"]
+        tmp_pattern = None
+        #最初に関数名だけ登録
+        for pattern in patterns:
+            tmp_pattern = operation_elements.Pattern(pattern["name"])
+            self._pattern_list.append(tmp_pattern)
+
+        tmp_pattern = None
+        #全部登録し終えたら、後は名前に対応する実装部分を登録する
+        for pattern in patterns:
+            #実装を登録する対象のpatternを見つける
+            tmp_pattern = self._get_pattern(pattern["name"])
+            if tmp_pattern is None:
+                registered_pattern_num = -1
+                break
+            #見つけたpatternの中にある各functionの実装を入れていく。pythonの多重loopって見づらいな。インデント数の問題か。
+            try:
+                for tmp_function in tmp_pattern.
+                self._build_operation_list(tmp_pattern,pattern["main"],False)
+                registered_pattern_num = registered_pattern_num + 1
+            except:
+                registered_pattern_num = -1
+                break
+        return registered_pattern_num
+
+
+
     def _get_function(self,func_name):
         return_func = None
         print(func_name)
@@ -43,6 +72,15 @@ class AST:
                 return_func = target_func
                 break
         return return_func
+
+    def _get_pattern(self,pattern_name):
+        return_pattern = None
+        for target_pattern in self._pattern_list:
+            if target_pattern.pattern_name == pattern_name:
+                return_pattern = target_pattern
+                break
+        return return_pattern
+
 
     def _build_main(self):
         self._build_operation_list(self._operation_main,self._yaml_operation_file["Main"],True)

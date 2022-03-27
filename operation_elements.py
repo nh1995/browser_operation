@@ -324,29 +324,38 @@ class Loop(Operation_List):
 #Compositter of Operation_List
 class Pattern():
     def __init__(self,pattern_name,pattern_string):
-        self._pattern_string = pattern_string
         self._pattern_name = pattern_name
-        self._operations_list = []
-        self._current_progress = 0
+        self._pattern_string = pattern_string
+        parse_result = self._parse_pattern()
+        self._pattern_list = parse_result[0]
+        self._used_funcnames = parse_result[1]
+        self._operations_list = self._make_operations_list()
 
-    def append_operation_list(self,operation_list):
-        if not is_instane(operation_list,Operation_List):
-            return -1
-        self._operations_list.append(operations_list)
-        return len(self._operations_list)
+    def _make_operations_list(self):
+        result_list = []
+        for pattern in self._pattern_list:
+            tmp_operation_list = Operation_List()
+            for funcname in pattern:
+                ope = Operation({"action" : "call", "func" : funcname})
+                tmp_operation_list.append_operation(ope)
+            result_list.append(tmp_operation_list)
+        return result_list
 
     #ここがむずいんじゃ
     def _parse_pattern(self):
-        #return list of function_names_list
-        return [[""]]
-    
-    def addup_progress(self):
-        self._current_progress += 1
-        return self._current_progress
+        return  regex_parser.parse_pattern(self._pattern_string)
     
     @property
-    def current_operation_list(self):
-        return self._operations_list[self._current_progress]
+    def pattern_list(self):
+        return self._pattern_list
+
+    @property
+    def used_funcnames(self):
+        return self._used_funcnames
+
+    @property
+    def operations_list(self):
+        return self._operations_list
 
 def print_class_members(self):
     string = "Hi! My name is " + str(type(self)) + "! not Slim Shady.\n"
@@ -372,3 +381,4 @@ Operation.__repr__ = print_class_members
 Operation_Core.__repr__ = print_class_members
 Operation_List.__repr__ = print_class_members
 Pattern.__repr__ = print_class_members
+Function.__repr__ = print_class_members

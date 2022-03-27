@@ -43,11 +43,11 @@ result3 = pere_expression(None,[p1,quantize3])
 for elm in result3:
     print(elm)
 
-with open("pattern_grammar.lark", encoding="utf-8") as grammar:
-    parser = lark.Lark(grammar.read(),start="pextended_reg_exp")
-    tree = parser.parse("((A{1,2} C){1,2}|X X{0,1}){2,3}")
-    result = []
-    result = Pattern_Transform().transform(tree)
-    print("show result")
-    for i in result:
-      print(i)
+result = []
+result = parse_pattern("(((AA BB{0,2}){0,2}|XXX YYY)){3}")
+print("show result")
+for i in result:
+  print(i)
+  if isinstance(i,list):
+    for j in i:
+      print(j)

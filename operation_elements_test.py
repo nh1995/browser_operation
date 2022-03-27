@@ -49,3 +49,11 @@ short_form_ope_dict = {
 
 short_form_ope = Operation(short_form_ope_dict)
 print(short_form_ope)
+
+p1 = Pattern("p1","(funcA funcB{0,2}){3}")
+print(p1.used_funcnames)
+print(p1.pattern_list)
+for elm in p1.pattern_list:
+    print(elm)
+print(p1.operations_list)
+print([Operation_List(),Operation_List()])
