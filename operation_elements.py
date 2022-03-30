@@ -1,5 +1,8 @@
 import re,yaml,copy,io,regex_parser
 
+#staticな情報しか持たないclassたちです。
+#情報が完成しているかいないか(パターンが適用されているかどうか)はあるけど。
+#つまり、ASTの要素として完成しきっていないよって情報は出す必要が在る。実行時解析が在るから。
 KEY_ACTION = "action"
 KEY_OBJECT = "objects"
 KEY_OBJECT_IS_SELECTOR = "is_objects_selector"
@@ -104,6 +107,8 @@ KEY_VALUES_VALID_FUNC_DICT = {
 }
      
 #なんというかoperationの内容物
+#指示ファイルに記載のOperationの内容をクラス形式に変換して提供する。
+#指示ファイルに記載のOperation1つに対して、完全に同等か、SuperSetとなるように情報を保存する
 class Operation_Core:
     def __init__(self,operation_dict):
         self._action = ""
@@ -145,7 +150,8 @@ class Operation_Core:
 
     @property
     def executable_operation(self):
-        return self._executable_operation
+        return self.__dict__
+
 
     def make_executable_operation(self):
         return {}
@@ -167,6 +173,9 @@ class Operation_Core:
     def call_function_name(self):
         return self._call_function_name
 
+#Operationの内容（何をするか？）へのアクセスと、関数呼び出しの場合は、
+#Functionクラスへの参照を持つ。
+#また、AST上のOperationとして一意に識別可能なキーを提供する
 class Operation:
     @property
     def executable_operation(self):
@@ -179,7 +188,6 @@ class Operation:
         self._child_pattern = None
         self._operation_core = Operation_Core(operation_dict)
         self._executable_operation = self.operation_core.executable_operation
-        self._iteration_idx = 0
         self._operation_id = 0
         self._is_pattern_appliled = False
         self._objects = []
@@ -196,8 +204,6 @@ class Operation:
     def child_operation_list(self):
         return self._child_operation_list
 
-    
-
     @property
     def iteration_idx(self):
         return self._iteration_idx
@@ -205,18 +211,6 @@ class Operation:
     @property
     def operation_id(self):
         return self._operation_id
-
-    #この関数いらないは。Loopでだけ直積表のiteration_idxもってればいい。        
-    def increment_iteration_idx(self):
-        is_iteratable = True
-        if not  self._operation_core.iteratble:
-            is_iteratable = False
-        elif self._operation_core.objects.len <= self._iteration_progress:
-            self._iteration_idx = 0
-        else:
-            self._iteration_idx = self._iteration_idx + 1
-        #インクリメントした結果のインデックス。iteratableなoprationでなければ-1
-        return  current_progress if is_iteratable else -1
 
     @child_operation_list.setter
     def child_operation_list(self,operation_list):
@@ -245,12 +239,17 @@ class Operation:
         elif   isinstance(object_list ,list) and object_list.len > 0:    
             raise ValueError(f'Object_list is not correct.')
 
+    def copy(self):
+        return copy.deepcopy(self)
+
+#Operatinのリスト。
+#自分の下に存在する、関数呼び出し、パターン呼び出し、オブジェクトのリストを持つOperationへの
+#キャシュを持つ
 class Operation_List:
     def __init__(self):
         self._operation_list = []
         self._iteratable_operations = []
         self._caller_operations = []
-        self._execution_times = 0
 
     @property
     def operation_list(self):
@@ -264,15 +263,8 @@ class Operation_List:
     def caller_operations(self):
         return self._caller_operations
 
-    @property
-    def execution_times(self):
-        return self._execution_times
-
-    @execution_times.setter
-    def execution_times(times):
-        if times < 1:
-            raise ValueError(f'Execution times needs to be greater eq than 1.')
-        self._execution_times = times
+    def copy(self):
+        return  copy.deepcopy(self)
 
     def append_operation(self,operation):
         if not isinstance(operation,Operation):
@@ -290,6 +282,7 @@ class Operation_List:
         return len(self.operation_list) - 1
 
 #Superset of Operation_List
+#呼び出しするための名前、インスタンス化の方法を提供する
 class Function(Operation_List):
     def __init__(self,function_name):
         super().__init__()
@@ -307,15 +300,27 @@ class Function(Operation_List):
     def make_instance(self):
         if self._is_instance:
             raise ValueError(f'Making instance from  function instance is prohibitted')
-        instance = copy.deepcopy(self)
+        instance =  self.copy()
         instance._is_instance = True
         return instance
 
+#自分の下にある、イテレータブルなオブジェクトのリスト、
 class Loop(Operation_List):
     def __init__(self):
         super().__init__()
-        self._current_loop_times = 0
-        self._pattern_table = None
+        #どういう情報があればよいだろうか？
+        #例えば、Operation_ListとobjectsのIndexね。
+        #Ope1 の 1つめ in objects と Ope2の 2つめ in objecsとかね
+        #実際、executable_operationはObjectのlistがのってるだけだし
+        #ということは、インデックスでないと、”ダメ”なわけですよ
+        #
+        self._objects_pattern_tabel = [[]]
+        self._functions_pattern_table = [[]]
+        #このLoopのどのタイミングで何をやるかが全部書いてあるテーブル
+        #これは、 table ---< iteration_time ---< object
+        #                                                                     | ---< function ---< object ←こいつどうすっかだね…一回Loop回しただけじゃ、決まりきらない
+        #つまり、いまLoop以下に、Iteratableだけど決定していない要素がありますよってことを確認するメソッドがいるな。かつ、処理的に時間がかかるとまずいわけ。たとえばLoop一回回すごとに呼び出すという使い方があり得る。
+        self._iteration_table = [[]]
 
     #Loop直下の要素を全て確認して、直積表を作る
     def make_pattern_table(self):
@@ -338,10 +343,12 @@ class Pattern():
             for funcname in pattern:
                 ope = Operation({"action" : "call", "func" : funcname})
                 tmp_operation_list.append_operation(ope)
-            result_list.append(tmp_operation_list)
+            caller_operation = Operation({"action" : "call"})
+            caller_operation.child_operation_list = tmp_operation_list
+            result_list.append(caller_operation)
+
         return result_list
 
-    #ここがむずいんじゃ
     def _parse_pattern(self):
         return  regex_parser.parse_pattern(self._pattern_string)
     
@@ -376,9 +383,3 @@ def print_class_members(self):
             string += "|----" + key + "=" + str(val) + "\n"
 
     return string
-
-Operation.__repr__ = print_class_members
-Operation_Core.__repr__ = print_class_members
-Operation_List.__repr__ = print_class_members
-Pattern.__repr__ = print_class_members
-Function.__repr__ = print_class_members

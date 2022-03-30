@@ -1,5 +1,11 @@
 from  operation_elements import *
 
+Operation.__repr__ = print_class_members
+Operation_Core.__repr__ = print_class_members
+"""Operation_List.__repr__ = print_class_members
+Pattern.__repr__ = print_class_members
+Function.__repr__ = print_class_members"""
+
 opelist1 = Operation_List()
 opelist2 = Operation_List()
 opelist3 = Operation_List()
@@ -47,13 +53,12 @@ short_form_ope_dict = {
     ,"T" : 3
 }
 
-short_form_ope = Operation(short_form_ope_dict)
-print(short_form_ope)
-
-p1 = Pattern("p1","(funcA funcB{0,2}){3}")
+p1 = Pattern("p1","(funcA funcB{0,2})")
 print(p1.used_funcnames)
 print(p1.pattern_list)
 for elm in p1.pattern_list:
     print(elm)
 print(p1.operations_list)
-print([Operation_List(),Operation_List()])
+#漢字のテスト
+short_form_ope = Operation(short_form_ope_dict)
+print(short_form_ope.executable_operation)

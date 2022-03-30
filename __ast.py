@@ -1,13 +1,22 @@
 import operation_elements,yaml
-
 #ymlObjectから命令構造体を構築する
+#じゃあ命令構造体へのアクセス方法は？ Operation_Elementsとかは隠蔽する。
+#Tree構造を隠蔽する？…したほうが良いな。
+#つまり、平たくするわけだから、Listを提供しよう。
+#え、んじゃさ、全部一気に渡すってこと？ 渡し方のレイヤーとしては、AST全体、Operation_List、Iteratorの３つじゃん。
+#iterator提供するならさ、もうRuntimeいらん気もする。
+#でもまあIterator提供すんのはわかりやすい。このClassの役割として。
+#じゃあさ、Iteratorはこいつが提供して、Runtimeに移譲しよう。
+#で、実行時情報みたいなのはRuntimeで持つ。それでいいくない？こいつは木を組んで、木に対するIterate方法を提供すると。
+#でもさ、データ構造部とIteration部は分けたいけどね。というかIteration情報部。そこやっぱ外出ししたい。
+#AST_Iteratorというクラスを作ってみます。
 class AST:
     def __init__(self,yml_obj):
         self._yaml_operation_file = yml_obj
         self._operation_main = operation_elements.Operation_List()
         self._function_list = []
         self._pattern_list = []
-    
+            
     def _register_functions(self):
         registered_function_num = 0
         functions = self._yaml_operation_file["Functions"]
@@ -39,30 +48,13 @@ class AST:
         registered_pattern_num = 0
         patterns = self._yaml_operation_file["Patterns"]
         tmp_pattern = None
-        #最初に関数名だけ登録
         for pattern in patterns:
-            tmp_pattern = operation_elements.Pattern(pattern["name"])
+            #Pattern内で何のfunctionを呼ぶかとかはinitでやってくれる
+            tmp_pattern = operation_elements.Pattern(pattern["name"],pattern["pattern"])
             self._pattern_list.append(tmp_pattern)
+            registered_pattern_num += 1
 
-        tmp_pattern = None
-        #全部登録し終えたら、後は名前に対応する実装部分を登録する
-        for pattern in patterns:
-            #実装を登録する対象のpatternを見つける
-            tmp_pattern = self._get_pattern(pattern["name"])
-            if tmp_pattern is None:
-                registered_pattern_num = -1
-                break
-            #見つけたpatternの中にある各functionの実装を入れていく。pythonの多重loopって見づらいな。インデント数の問題か。
-            try:
-                for tmp_function in tmp_pattern.
-                self._build_operation_list(tmp_pattern,pattern["main"],False)
-                registered_pattern_num = registered_pattern_num + 1
-            except:
-                registered_pattern_num = -1
-                break
         return registered_pattern_num
-
-
 
     def _get_function(self,func_name):
         return_func = None
@@ -96,7 +88,9 @@ class AST:
             #この辺はis_loopとして関数化
             if operation.get("loop")  is None:
                 tmp_operation = operation_elements.Operation(operation)
-                if  is_instancise_function and  tmp_operation.operation_core.action =="call":
+                if (is_instancise_function
+                        and tmp_operation.operation_core.action =="call"
+                        and tmp_operation.operation_core.call_function_name != ""):
                     #再帰的にinstance化
                     self._make_function_instance(tmp_operation,{})
             else:
@@ -108,7 +102,9 @@ class AST:
 
             if is_deepen_tree:
                 #再帰的に呼び出す
+                self._loop_stack.append(tmp_operation)
                 self._build_operation_list(tmp_operation.child_operation_list,operation["loop"],is_instancise_function)
+                self._loop_stack.pop()
         return True
 
     #再帰的にfunction以下にあるfunctionのインスタンス化
@@ -133,6 +129,57 @@ class AST:
 
         return True
 
+    @property
+    def function_list(self):
+        return self._function_list
+    
+    @property
+    def pattern_list(self):
+        return self._pattern_list
+    
+    @property
+    def operation_main(self):
+        return self._operation_main
+
+#astのCompossiter。Iteratorを提供する。
+#iteratorが提供するのは、executable_operation
+class AST_Iterator():
+    def __init__(self,ast):
+        self._ast = ast
+        self._operation_main = ast.operation_main
+        self._current_operation_list = self._operation_main.operation_list
+        self._current_progress = 0
+        self._operation_list_stack = []
+        self._progress_stack = []
+        self._loop_progress_stack = []
+        
+    def iterate(self):
+        #基本的にOperation_List(&its SuperSets)に対して操作を行うかな？
+        return_operation = None
+        ope_list = self._current_operation_list
+        operation_index = self._current_progress
+        #対象としているOperation_Listがおわっていたら、stackから取り出す
+        if operation_index < len(ope_list):
+            return_operation = ope_list[operation_index]
+            self._current_progress += 1
+        else:
+            while len(self._operation_list_stack) > 0:
+                self._current_operation_list = self._operation_list_stack.pop()
+                self._current_progress = self._progress_stack.pop()
+                if self._current_progress  > len(self._current_operation_list):
+                    return_operation = self._current_operation_list[self._current_progress]
+                    break
+        if return_operation.child_operation_list is not None:
+            self._operation_list_stack.append(self._current_operation_list)
+            self._progress_stack.append(self._current_progress)
+            return_operation = return_operation.child_operation_list.operation_list[0]
+            self._current_operation_list = return_operation.child_operation_list
+            self._current_progress = 0
+        return return_operation.executable_operation
+
+
+
+
 
 func1 = {
     "name" : "funca"
@@ -142,12 +189,20 @@ func2 = {
     "name" : "funcb"
     ,"main" : []
 }
+pattern1 = {
+    "name" : "p1"
+    ,"pattern" : "funca funcb"
+}
+pattern2 ={
+    "name" : "p2"
+    ,"pattern" : "funca{0,2} funcb"
+}
 click_something = {"action" : "click","object" : ["something"]}
 click_loopsomthing = {"action" : "click", "object" : ["loopsomething"]}
 call_funca = {"action" : "call" , "func" : "funca"}
 call_funcb = {"action" : "call" , "func" : "funcb"}
 loopa = {"loop" : []}
-ast_struct = {"Functions": [] , "Main" : []}
+ast_struct = {"Functions": [] , "Patterns" : [],"Main" : []}
 
 func1["main"].append(click_something)
 func1["main"].append(call_funcb)
@@ -159,6 +214,8 @@ func2["main"].append(click_something)
 
 ast_struct["Functions"].append(func1)
 ast_struct["Functions"].append(func2)
+ast_struct["Patterns"].append(pattern1)
+ast_struct["Patterns"].append(pattern2)
 
 ast_struct["Main"].append(click_something)
 ast_struct["Main"].append(call_funca)
@@ -168,7 +225,8 @@ print(ast_struct)
 
 ast = AST(ast_struct)
 print(ast._register_functions())
-ast._build_main()
+print(ast._register_patterns())
 print(ast._function_list[0].operation_list[2]._operation_core.action)
 print(ast._function_list[0].operation_list[2]._child_operation_list.operation_list[0])
 print(ast._function_list[0].operation_list[2]._child_operation_list.operation_list[0]._operation_core.objects)
+print(ast._pattern_list)
