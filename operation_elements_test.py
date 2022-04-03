@@ -59,6 +59,6 @@ print(p1.pattern_list)
 for elm in p1.pattern_list:
     print(elm)
 print(p1.operations_list)
-#漢字のテスト
+
 short_form_ope = Operation(short_form_ope_dict)
 print(short_form_ope.executable_operation)

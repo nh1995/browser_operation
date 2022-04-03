@@ -11,7 +11,7 @@ class Pattern_Transform(lark.Transformer):
     #@param tree[1]-> 2dime list
     #@return 2dime list
     def pextended_reg_exp(self,tree):
-        print("pextended_reg_exp")
+        #print("pextended_reg_exp")
         result_list = []
         if len(tree) >= 2:
 #            for elm in tree[1]:
@@ -19,7 +19,7 @@ class Pattern_Transform(lark.Transformer):
             result_list.extend(tree[1])
         else:
             result_list = tree[0]
-        print(result_list)
+        #print(result_list)
         return result_list
 
     #interface
@@ -34,8 +34,8 @@ class Pattern_Transform(lark.Transformer):
 #   @param tree[1] 2dime list
 #   @param 2dime list
     def pere_branch(self,tree):
-        print("pere_branch")
-        print(tree)
+        #print("pere_branch")
+        #print(tree)
         result_list = []
         if len(tree) >= 2:
             tmp_list = []
@@ -47,7 +47,7 @@ class Pattern_Transform(lark.Transformer):
                 result_list.append(a)
         else:
             result_list = tree[0]
-        print(result_list)
+        #print(result_list)
         return result_list
 
     def dup_count_max(self,token):
@@ -74,13 +74,13 @@ class Pattern_Transform(lark.Transformer):
     @return 2dime list
 """
 def pere_expression(self,tree):
-    print("pere_expression new")
-    print(tree)
+    #print("pere_expression new")
+    #print(tree)
     #2dime list
     result_list = []
     expression_list = tree[0] if isinstance(tree[0],list) else [tree[0]]
     dupl_symbol = None
-#    print(expression_list)
+#    #print(expression_list)
     if len(tree) >= 2:
         dupl_symbol = tree.pop()
     #最後の要素がdictなら、最後の要素は回数指定なので、回数をかける
@@ -99,22 +99,22 @@ def pere_expression(self,tree):
                 for j in range(i):
                     tmp_list.append(expression_list)
                 producted_list = pattern_table.make_pattern_table(tmp_list)
-                print(producted_list)
-                print(result_list)
+                #print(producted_list)
+                #print(result_list)
                 for elm in producted_list:
                     tmp_p = []
                     for p2 in elm:
                        tmp_p.extend(p2)
                     result_list.append(tmp_p)
-                print(result_list)
-#                print(result_list)
+                #print(result_list)
+#                #print(result_list)
 #                for j in range(i):
 #                    for elm in expression_list:
 #                        producted_list.extend(elm)
 #                result_list.append(producted_list)
     else:
             result_list = expression_list
-    print(result_list)
+    #print(result_list)
     return result_list
 
 Pattern_Transform.pere_expression = pere_expression
@@ -123,7 +123,7 @@ Pattern_Transform.pere_expression = pere_expression
 def init():
     global Pattern_Parser
     Pattern_Parser = None
-    print("initing")
+    #print("initing")
     with open("pattern_grammar.lark", encoding="utf-8") as grammar:
         Pattern_Parser = lark.Lark(grammar.read(),start="pextended_reg_exp")
 
@@ -141,4 +141,4 @@ def parse_pattern(pattern_string):
     return (result_list,transformer._function_names)
 
 init()
-print(Pattern_Parser)
+#print(Pattern_Parser)

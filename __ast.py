@@ -1,4 +1,6 @@
-import operation_elements,yaml
+import operation_elements,yaml,copy,regex_parser,pattern_table
+#Inter operation_elements なclassをまとめたもの。
+#要は、Operation_elementsのclassのcompositterのクラス
 #ymlObjectから命令構造体を構築する
 #じゃあ命令構造体へのアクセス方法は？ Operation_Elementsとかは隠蔽する。
 #Tree構造を隠蔽する？…したほうが良いな。
@@ -13,9 +15,15 @@ import operation_elements,yaml
 class AST:
     def __init__(self,yml_obj):
         self._yaml_operation_file = yml_obj
+        self._total_operation_num = 0
         self._operation_main = operation_elements.Operation_List()
         self._function_list = []
         self._pattern_list = []
+        self._loop_stack = []
+        self._loop_labels = []
+        self._register_functions()
+        self._register_patterns()
+        self._build_main()
             
     def _register_functions(self):
         registered_function_num = 0
@@ -50,7 +58,7 @@ class AST:
         tmp_pattern = None
         for pattern in patterns:
             #Pattern内で何のfunctionを呼ぶかとかはinitでやってくれる
-            tmp_pattern = operation_elements.Pattern(pattern["name"],pattern["pattern"])
+            tmp_pattern = Pattern(pattern["name"],pattern["pattern"])
             self._pattern_list.append(tmp_pattern)
             registered_pattern_num += 1
 
@@ -73,13 +81,12 @@ class AST:
                 break
         return return_pattern
 
-
     def _build_main(self):
         self._build_operation_list(self._operation_main,self._yaml_operation_file["Main"],True)
         return True
 
     def _build_operation_list(self,target_list,operations,is_instancise_function):
-        #functionのinterfaceを守ってないとだめ
+        #opelistのinterfaceを守ってないとだめ
         if not isinstance(target_list,operation_elements.Operation_List):
             raise ValueError(f'Parameter target_list needs to be instance of Operation_List   class.')
         #operations needs to be list
@@ -88,35 +95,48 @@ class AST:
             #この辺はis_loopとして関数化
             if operation.get("loop")  is None:
                 tmp_operation = operation_elements.Operation(operation)
-                if (is_instancise_function
-                        and tmp_operation.operation_core.action =="call"
-                        and tmp_operation.operation_core.call_function_name != ""):
-                    #再帰的にinstance化
-                    self._make_function_instance(tmp_operation,{})
+                if is_instancise_function:
+                    if tmp_operation.executable_operation["action"] =="call":
+                        #再帰的にinstance化
+                        self._make_caller_instance(tmp_operation,{})
+            #loopの場合
             else:
+                #これ以下はloopするということを示すoperation。これをlistに追加
                 tmp_operation = operation_elements.Operation({"action" : "loop"})
-                #loop用のoperationを作る
-                tmp_operation.child_operation_list = operation_elements.Loop()
+                #loop以下への参照を持たせる
+                tmp_operation.child_operation_list = operation_elements.Operation_List()
+                self._loop_labels.append(Loop(tmp_operation))
+                #現在見ているloopをstackに入れる
+                self._loop_stack.append(self._loop_labels[len(self._loop_labels) - 1])
                 is_deepen_tree = True
             target_list.append_operation(tmp_operation)
 
             if is_deepen_tree:
-                #再帰的に呼び出す
-                self._loop_stack.append(tmp_operation)
+                #一つ下の階層のリストを確認していく
                 self._build_operation_list(tmp_operation.child_operation_list,operation["loop"],is_instancise_function)
-                self._loop_stack.pop()
+                latest_loop =  self._loop_stack.pop()
+                loop_list = self._convert_loop_pattern(latest_loop)
+                for loop in loop_list:
+                    self._loop_labels.append(loop)
+                    target_list.append_operation(loop._loop_operation)
+        
+        #この階層のOperation_Listが全て見終わった。上の階層が在る場合は呼び出し元の続きを引き続き見る。
+        #loopの場合は、loopの実装が終わったと同義。
+        target_label =   self._loop_stack[len(self._loop_stack) - 1]
+        target_label.get_all_patterns()
+        
         return True
 
     #再帰的にfunction以下にあるfunctionのインスタンス化
-    def _make_function_instance(self,caller_operation,function_names):
+    def _make_caller_instance(self,caller_operation,function_names):
         if not  isinstance(caller_operation,operation_elements.Operation):
             raise ValueError(f'Parameter caller_operation should be instance of Operation')
         
-        #まずはoperationがcallしているfunctionをinstance化する
-        func_def = self._get_function(caller_operation.operation_core.call_function_name)
-        if func_def is None:
-            raise ValueError(f'Function not fonund.')
-        caller_operation.child_operation_list = func_def.make_instance()
+        if "call_pattern_name" in caller_operation.executable_operation and caller_operation.executable_operation["call_pattern_name"] != "":
+            caller_operation.child_operation_list = self._get_pattern_instance(caller_operation.executable_operation["call_pattern_name"])
+        elif "call_function_name" in caller_operation.executable_operation and  caller_operation.executable_operation["call_function_name"] != "":
+            caller_operation.child_operation_list = self._get_function_instance(caller_operation.executable_operation["call_function_name"])
+
 #      recursive call 対応
 #            if hasattr(function_names,func_def.function_name):
 #                raise ValueError(f'Function is called recursively.')
@@ -125,10 +145,27 @@ class AST:
 
         #callするfunctionの中で、更に別のfunctionも呼んでいる場合は、それらも再帰的にinstance化
         for operation in caller_operation.child_operation_list.caller_operations:
-            self._make_function_instance(operation,function_names)
+            self._make_caller_instance(operation,function_names)
 
         return True
 
+    def _get_function_instance(self,func_name):
+        #まずはoperationがcallしているfunctionをinstance化する
+        func_def = self._get_function(func_name)
+        if func_def is None:
+            raise ValueError(f'Function not fonund.')
+        return func_def.make_instance()
+
+    def _get_pattern_instance(self,pattern_name):
+        pattern_def = self._get_pattern(pattern_name)
+        if pattern_def is None:
+            raise ValueError(f'Pattern not fonund.' + pattern_name)
+        return pattern_def.caller_operation_list
+
+    def _convert_loop_pattern(self,loop):
+        return_list = loop
+        return [loop]
+    
     @property
     def function_list(self):
         return self._function_list
@@ -141,6 +178,140 @@ class AST:
     def operation_main(self):
         return self._operation_main
 
+#Compositter of Operation_List
+#patternは、複数のLoopに実行前解析で直せるので実行前解析で直す
+#本当はこれはトランスパイラを作って直すのが正しいかも
+class Pattern():
+    def __init__(self,pattern_name,pattern_string):
+        self._pattern_name = pattern_name
+        self._pattern_string = pattern_string
+        parse_result = self._parse_pattern()
+        self._pattern_list = parse_result[0]
+        self._used_funcnames = parse_result[1]
+        self._operations_list = self._make_operations_list()
+        self._used_func_instances = []
+        #こいついるか？
+        self._caller_operation_list = self._make_caller_operation_list()
+
+    def _make_operations_list(self):
+        result_list = []
+        for pattern in self._pattern_list:
+            tmp_operation_list = operation_elements.Operation_List()
+            for funcname in pattern:
+                ope = operation_elements.Operation({"action" : "call", "func" : funcname})
+                tmp_operation_list.append_operation(ope)
+            caller_operation = operation_elements.Operation({"action" : "call"})
+            caller_operation.child_operation_list = tmp_operation_list
+            result_list.append(caller_operation)
+
+        return result_list
+
+    def _make_caller_operation_list(self):
+        tmp_opelist = operation_elements.Operation_List()
+        for operation in self._operations_list:
+            tmp_opelist.append_operation(operation)
+        return tmp_opelist
+
+    def _parse_pattern(self):
+        return  regex_parser.parse_pattern(self._pattern_string)
+
+    @property
+    def pattern_name(self):
+        return self._pattern_name
+
+    @property
+    def pattern_list(self):
+        return self._pattern_list
+
+    @property
+    def used_funcnames(self):
+        return self._used_funcnames
+
+    @property
+    def operations_list(self):
+        return self._operations_list
+
+    @property
+    def caller_operation_list(self):
+        return copy.deepcopy(self._caller_operation_list)
+
+#ラベル。どっからどこまでとか、その影響範囲には何が在るとかとかを持つ
+#Compositter of Operation(_List?のほうが良い？)
+class Loop():
+    def __init__(self,loop_operation):
+        self._iteratable_operatoin_list = []
+        self._pattern_operation_list = []
+        #どういう情報があればよいだろうか？
+        #例えば、Operation_ListとobjectsのIndexね。
+        #Ope1 の 1つめ in objects と Ope2の 2つめ in objecsとかね
+        #実際、executable_operationはObjectのlistがのってるだけだし
+        #ということは、インデックスでないと、”ダメ”なわけですよ
+        #このLoopのどのタイミングで何をやるかが全部書いてあるテーブル
+        #これは、 table ---< iteration_time ---< object
+        #                                                                     | ---< function ---< object ←こいつどうすっかだね…一回Loop回しただけじゃ、決まりきらない
+        #つまり、いまLoop以下に、Iteratableだけど決定していない要素がありますよってことを確認するメソッドがいるな。かつ、処理的に時間がかかるとまずいわけ。たとえばLoop一回回すごとに呼び出すという使い方があり得る。
+        #これはべつに内部的な情報保管だから、別にどういう持ち方してもいいのよ。
+        #ようは、外部に対するinterfaceさえ守れれば良いんだから。こんなんはプライベート変数なんだからさ。気楽に。
+        #なんかkeynameもつとかどう？？ KEYNAMEと、Operationへの参照と、値。みたいな。
+        #ようは、元ね。参照持てば、Loopの以下がいくら再帰しててもLoopから値を変更できる。executable_operatinを変更する、って感じで。
+        #とりあえず、これでobjectsはいいはず。objectsは良くて、問題はPatternかな…。
+        #Patternは、child_operation_listを入れ替えるとかかな…。そう、在るべき姿が分からんのよ。
+        #でも、在るべき姿はさ、要は、executable_operationについて言えば、listが存在しないことでしょ。
+        #じゃあ、Patternは？　そもそも、patternをcallすると、
+        #必要な情報としては、「どのOperation」で、「どのkey」は「どのvalue」を選ぶかだから、これはセットになってる必要が在る。
+        #これ以上の分解できないなこれ。どのOperation? どのkey？が主キーだから、例えばこれと対応させたIDとか作れば別だけど、
+        #それは意味ないしあんま。実質この3つは必ずセットになる。
+        #じゃあどういうデータ構造にするかだけど…。
+        #{"operation_id" : [{"key" : "XXX" , "val" : 0},{"key" : "ZZZ", "val" : 1}]}
+        #valはexecutable_operation["object"][0]、みたいに選択すべきobjectのインデックス
+        #なんでope_idに対して配列で持つかって言うと、objectが複数statusが複数ならそこでも掛け合わせるから
+        self._iteration_table = [[]]
+        #別にどっからがloopのはじまりか識別できればいいから、参照持っとく
+        self._loop_operation = loop_operation
+
+    #Loop直下の要素を全て確認して、直積表を作る
+    #interface
+    #@param object_list 2dime list
+    #@return 2dime list
+    def make_pattern_table(self):
+        target_list = []
+        for ope in self._iteratable_operation_list:
+            ope_id = ope.operation_id
+            for iteratable_key in ope.iteratable_keys:
+                #なんというかobjectsのindex0と1は排他的な関係だというのを表したかった
+                #逆にtarget_listは共存的関係ね。
+                exclusive_list = []
+                list_len = len(ope.executable_operation[iteratable_key])
+                for i  in range(list_len):
+                    exclusive_list.append({"id" : str(ope_id),"key" : iteratable_key, "idx" : i})
+                target_list.append(exclusive_list)
+        producted_table =  pattern_table.make_pattern_table(target_list)
+        #idが被ってたら一緒のdictに入れる
+        for tmp_list in producted_table:
+            appended_dict = {}
+            for tmp_dict in tmp_list:
+                if not tmp_dict["id"] in appended_dict:
+                    appended_dict[tmp_dict["id"]] = []
+                appended_dict[tmp_dict["id"]].append({"key" : tmp_dict["key"],"idx" : tmp_dict["idx"]})
+            self._iteration_table.append(appended_dict)
+        return False
+
+    def get_all_iteratables(self):
+        opelist = self._loop_operation.child_operation_list
+        self._iteratable_operation_list = opelist.get_iteratables_recursively()
+        return True
+
+    def get_all_patterns(self):
+        opelist = self._loop_operation.child_operation_list
+        tmp_caller_list = opelist.get_callers_recursively()
+        for caller in tmp_caller_list:
+            if caller.executable_operation["call_pattern_name"] != "":
+                self._pattern_operation_list.append(caller)
+        return True
+
+    def copy(self):
+        return copy.deepcopy(self)
+
 #astのCompossiter。Iteratorを提供する。
 #iteratorが提供するのは、executable_operation
 class AST_Iterator():
@@ -148,6 +319,7 @@ class AST_Iterator():
         self._ast = ast
         self._operation_main = ast.operation_main
         self._current_operation_list = self._operation_main.operation_list
+        print(self._current_operation_list)
         self._current_progress = 0
         self._operation_list_stack = []
         self._progress_stack = []
@@ -162,6 +334,7 @@ class AST_Iterator():
         if operation_index < len(ope_list):
             return_operation = ope_list[operation_index]
             self._current_progress += 1
+            print("progress " + str(operation_index))
         else:
             while len(self._operation_list_stack) > 0:
                 self._current_operation_list = self._operation_list_stack.pop()
@@ -172,61 +345,7 @@ class AST_Iterator():
         if return_operation.child_operation_list is not None:
             self._operation_list_stack.append(self._current_operation_list)
             self._progress_stack.append(self._current_progress)
-            return_operation = return_operation.child_operation_list.operation_list[0]
-            self._current_operation_list = return_operation.child_operation_list
+            self._current_operation_list = return_operation.child_operation_list.operation_list
             self._current_progress = 0
+            return_operation = return_operation.child_operation_list.operation_list[0]
         return return_operation.executable_operation
-
-
-
-
-
-func1 = {
-    "name" : "funca"
-    ,"main" : []
-}
-func2 = {
-    "name" : "funcb"
-    ,"main" : []
-}
-pattern1 = {
-    "name" : "p1"
-    ,"pattern" : "funca funcb"
-}
-pattern2 ={
-    "name" : "p2"
-    ,"pattern" : "funca{0,2} funcb"
-}
-click_something = {"action" : "click","object" : ["something"]}
-click_loopsomthing = {"action" : "click", "object" : ["loopsomething"]}
-call_funca = {"action" : "call" , "func" : "funca"}
-call_funcb = {"action" : "call" , "func" : "funcb"}
-loopa = {"loop" : []}
-ast_struct = {"Functions": [] , "Patterns" : [],"Main" : []}
-
-func1["main"].append(click_something)
-func1["main"].append(call_funcb)
-loopa["loop"].append(click_loopsomthing)
-loopa["loop"].append(call_funcb)
-func1["main"].append(loopa)
-
-func2["main"].append(click_something)
-
-ast_struct["Functions"].append(func1)
-ast_struct["Functions"].append(func2)
-ast_struct["Patterns"].append(pattern1)
-ast_struct["Patterns"].append(pattern2)
-
-ast_struct["Main"].append(click_something)
-ast_struct["Main"].append(call_funca)
-ast_struct["Main"].append(loopa)
-ast_struct["Main"].append(call_funcb)
-print(ast_struct)
-
-ast = AST(ast_struct)
-print(ast._register_functions())
-print(ast._register_patterns())
-print(ast._function_list[0].operation_list[2]._operation_core.action)
-print(ast._function_list[0].operation_list[2]._child_operation_list.operation_list[0])
-print(ast._function_list[0].operation_list[2]._child_operation_list.operation_list[0]._operation_core.objects)
-print(ast._pattern_list)

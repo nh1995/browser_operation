@@ -7,13 +7,13 @@ KEY_ACTION = "action"
 KEY_OBJECT = "objects"
 KEY_OBJECT_IS_SELECTOR = "is_objects_selector"
 KEY_ACTION_TO = "action_to_list"
-KEY_EXPECTED_STATUS = "expected_statuses"
+KEY_OBJECT_STATUS = "object_statuses"
 KEY_STATUS_IS_PREDICATE = "is_statuses_predicate"
 KEY_TIMES = "times"
 KEY_ITERATABLE = "iteratable"
-KEY_EXPECTED_STATUS = "expected_statuses"
 KEY_LABEL = "label"
 KEY_FUNCTION = "call_function_name"
+KEY_PATTERN = "call_pattern_name"
 KEY_VALUE = "value"
 KEY_SECOND = "second"
 
@@ -25,12 +25,15 @@ OPERATION_KEY_REF_DICT = {
     ,"OBJECT" : KEY_OBJECT
     ,"I": KEY_ITERATABLE
     ,"ITERATABLE" : KEY_ITERATABLE
-    ,"ES" : KEY_EXPECTED_STATUS
-    ,"EXPECTED_STATUS" : KEY_EXPECTED_STATUS
+    ,"S" : KEY_OBJECT_STATUS
+    ,"STATUS" : KEY_OBJECT_STATUS
+    ,"OBJECT_STATUS" : KEY_OBJECT_STATUS
     ,"PRED" : KEY_STATUS_IS_PREDICATE
     ,"IS_PREDICATE" : KEY_STATUS_IS_PREDICATE
     ,"FUNC" : KEY_FUNCTION
     ,"FUNCTION" : KEY_FUNCTION
+    ,"P" : KEY_PATTERN
+    ,"PATTERN" : KEY_PATTERN
     ,"SEL" : KEY_OBJECT_IS_SELECTOR
     ,"IS_SELECTOR" : KEY_OBJECT_IS_SELECTOR
     ,"TO" : KEY_ACTION_TO
@@ -46,7 +49,7 @@ OPERATION_KEY_REF_DICT = {
 
 IS_LISTABLE_KEY_DICT = {
     KEY_OBJECT : True
-    ,KEY_EXPECTED_STATUS : True
+    ,KEY_OBJECT_STATUS : True
     ,KEY_ACTION_TO : True
     ,KEY_VALUE : True
 }
@@ -95,13 +98,14 @@ KEY_VALUES_VALID_FUNC_DICT = {
     KEY_ACTION : valid_action
     ,KEY_OBJECT : is_str_or_strlist
     ,KEY_OBJECT_IS_SELECTOR : is_bool
-    ,KEY_EXPECTED_STATUS : is_str_or_strlist
+    ,KEY_OBJECT_STATUS : is_str_or_strlist
     ,KEY_ACTION_TO : is_str_or_strlist
     ,KEY_STATUS_IS_PREDICATE : is_bool
     ,KEY_TIMES : is_int
     ,KEY_ITERATABLE : is_bool
     ,KEY_LABEL : is_str
     ,KEY_FUNCTION : is_str
+    ,KEY_PATTERN : is_str
     ,KEY_SECOND : is_int
     ,KEY_VALUE : is_str_or_strlist
 }
@@ -116,16 +120,18 @@ class Operation_Core:
         self._is_objects_cssselector = False
         self._action_to_list = []
         self._is_action_to_cssselector = False
-        self._expected_statuses = []
+        self._object_statuses = []
         self._is_statuses_predicate = False
         self._iteratable = False
         self._times = 1
         self._label = ""
         self._call_function_name = ""
+        self._call_pattern_name = ""
         self._second = 0
         self._values = []
 
         self._executable_operation = None
+        self._iteratable_keys =[]
 
         self._set_keys(operation_dict)
 
@@ -144,18 +150,34 @@ class Operation_Core:
                 if not KEY_VALUES_VALID_FUNC_DICT[tmp_member_name](tmp_value):
                     raise ValueError(f"Validation failed.KEY = " + tmp_member_name  +  " value = " + str(tmp_value))
                 if tmp_member_name  in IS_LISTABLE_KEY_DICT:
-                    self.__setattr__("_" + OPERATION_KEY_REF_DICT[uppered_name],tmp_value if isinstance(tmp_value,list) else [tmp_value])
+                    is_list = isinstance(tmp_value,list)
+                    push_value = None
+                    if is_list:
+                        push_value = tmp_value
+                        if len(push_value) > 1:
+                            self._iteratable_keys.append(tmp_member_name)
+                            self._iteratable = True
+                    else:
+                        push_value = [tmp_value]
+                    self.__setattr__("_" + OPERATION_KEY_REF_DICT[uppered_name],push_value)
                 else:
                     self.__setattr__("_" + OPERATION_KEY_REF_DICT[uppered_name],operation_dict[key])
 
     @property
     def executable_operation(self):
-        return self.__dict__
+        #そのOperationで最も優先度の高い命令内容をdict形式にして渡す
+        #この時、listの要素もリストのまま渡す
+        return_dict = {}
+        for key in self.__dict__.keys():
+            return_dict[key[1:]] = self.__dict__[key]
+        return return_dict
 
+    @property
+    def iteratable_keys(self):
+        return self._iteratable_keys
 
     def make_executable_operation(self):
         return {}
-
 
     @property
     def action(self):
@@ -179,7 +201,9 @@ class Operation_Core:
 class Operation:
     @property
     def executable_operation(self):
-        return self._operation_core.executable_operation
+        return_dict = self._operation_core.executable_operation
+        return_dict["id"] = self._operation_id
+        return return_dict
 
     def __init__(self,operation_dict):
         #Composition of Operation_List
@@ -188,7 +212,9 @@ class Operation:
         self._child_pattern = None
         self._operation_core = Operation_Core(operation_dict)
         self._executable_operation = self.operation_core.executable_operation
+        self._iteratable_keys = self.operation_core.iteratable_keys
         self._operation_id = 0
+        self._iteratable = self.operation_core.iteratable
         self._is_pattern_appliled = False
         self._objects = []
 
@@ -205,12 +231,12 @@ class Operation:
         return self._child_operation_list
 
     @property
-    def iteration_idx(self):
-        return self._iteration_idx
-    
-    @property
     def operation_id(self):
         return self._operation_id
+
+    @operation_id.setter
+    def operation_id(self,id):
+        self._operation_id = id 
 
     @child_operation_list.setter
     def child_operation_list(self,operation_list):
@@ -239,6 +265,14 @@ class Operation:
         elif   isinstance(object_list ,list) and object_list.len > 0:    
             raise ValueError(f'Object_list is not correct.')
 
+    @property
+    def iteratable(self):
+        return self._iteratable
+
+    @property
+    def iteratable_keys(self):
+        return self._operation_core.iteratable_keys
+
     def copy(self):
         return copy.deepcopy(self)
 
@@ -266,21 +300,51 @@ class Operation_List:
     def copy(self):
         return  copy.deepcopy(self)
 
+    def get_iteratables_recursively(self):
+        return_list = []
+        return_list.extend(self._iteratable_operations)
+        for caller in self._caller_operations:
+            if caller.child_operation_list is not None:
+                return_list.extend(caller.child_operation_list.get_iteratables_recursively())
+        return return_list
+
+    def get_callers_recursively(self):
+        return_list = []
+        return_list.extend(self._caller_operations)
+        for caller in self._caller_operations:
+            if caller.child_operation_list is not None:
+                return_list.extend(caller.child_operation_list.get_callers_recursively())
+        return return_list
+
     def append_operation(self,operation):
         if not isinstance(operation,Operation):
             return -1
         
         self._operation_list.append(operation)
         #iteratableなら、iteratable配列にインデックスを入れる
-        if operation.operation_core.iteratable:
-            self._iteratable_operations.appned(operation)
+        if operation.iteratable:
+            self._iteratable_operations.append(operation)
         #functionかloopを呼ぶoperationなら、caller配列にindexを入れる
-        if operation.operation_core.action == "call":
+        if operation.executable_operation["action"] == "call":
             self._caller_operations.append(operation)
         
         #indexを返す
         return len(self.operation_list) - 1
 
+    #operationを一つ取り出す
+    #interface
+    #@param index いくつめのOperationか
+    #@return dict 要素にlistは含まない/ None もうOperationがない
+    def get_operation(self,index):
+        return_operation = None
+        if index < len(self):
+            return_operation = self._operation_list[index]
+            #Operation_List経由の場合、Operation内のlist要素は全て最初のインデックスの値を入れる
+            for key in dict.keys():
+                if isinstance(list,dict[key]):
+                    dict[key] = dict[key][0]
+        return return_operation
+        
 #Superset of Operation_List
 #呼び出しするための名前、インスタンス化の方法を提供する
 class Function(Operation_List):
@@ -303,66 +367,6 @@ class Function(Operation_List):
         instance =  self.copy()
         instance._is_instance = True
         return instance
-
-#自分の下にある、イテレータブルなオブジェクトのリスト、
-class Loop(Operation_List):
-    def __init__(self):
-        super().__init__()
-        #どういう情報があればよいだろうか？
-        #例えば、Operation_ListとobjectsのIndexね。
-        #Ope1 の 1つめ in objects と Ope2の 2つめ in objecsとかね
-        #実際、executable_operationはObjectのlistがのってるだけだし
-        #ということは、インデックスでないと、”ダメ”なわけですよ
-        #
-        self._objects_pattern_tabel = [[]]
-        self._functions_pattern_table = [[]]
-        #このLoopのどのタイミングで何をやるかが全部書いてあるテーブル
-        #これは、 table ---< iteration_time ---< object
-        #                                                                     | ---< function ---< object ←こいつどうすっかだね…一回Loop回しただけじゃ、決まりきらない
-        #つまり、いまLoop以下に、Iteratableだけど決定していない要素がありますよってことを確認するメソッドがいるな。かつ、処理的に時間がかかるとまずいわけ。たとえばLoop一回回すごとに呼び出すという使い方があり得る。
-        self._iteration_table = [[]]
-
-    #Loop直下の要素を全て確認して、直積表を作る
-    def make_pattern_table(self):
-        return False
-
-#Compositter of Operation_List
-class Pattern():
-    def __init__(self,pattern_name,pattern_string):
-        self._pattern_name = pattern_name
-        self._pattern_string = pattern_string
-        parse_result = self._parse_pattern()
-        self._pattern_list = parse_result[0]
-        self._used_funcnames = parse_result[1]
-        self._operations_list = self._make_operations_list()
-
-    def _make_operations_list(self):
-        result_list = []
-        for pattern in self._pattern_list:
-            tmp_operation_list = Operation_List()
-            for funcname in pattern:
-                ope = Operation({"action" : "call", "func" : funcname})
-                tmp_operation_list.append_operation(ope)
-            caller_operation = Operation({"action" : "call"})
-            caller_operation.child_operation_list = tmp_operation_list
-            result_list.append(caller_operation)
-
-        return result_list
-
-    def _parse_pattern(self):
-        return  regex_parser.parse_pattern(self._pattern_string)
-    
-    @property
-    def pattern_list(self):
-        return self._pattern_list
-
-    @property
-    def used_funcnames(self):
-        return self._used_funcnames
-
-    @property
-    def operations_list(self):
-        return self._operations_list
 
 def print_class_members(self):
     string = "Hi! My name is " + str(type(self)) + "! not Slim Shady.\n"
