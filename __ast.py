@@ -12,6 +12,7 @@ import operation_elements,yaml,copy,regex_parser,pattern_table
 #で、実行時情報みたいなのはRuntimeで持つ。それでいいくない？こいつは木を組んで、木に対するIterate方法を提供すると。
 #でもさ、データ構造部とIteration部は分けたいけどね。というかIteration情報部。そこやっぱ外出ししたい。
 #AST_Iteratorというクラスを作ってみます。
+for_debug = []
 class AST:
     def __init__(self,yml_obj):
         self._yaml_operation_file = yml_obj
@@ -122,9 +123,13 @@ class AST:
         
         #この階層のOperation_Listが全て見終わった。上の階層が在る場合は呼び出し元の続きを引き続き見る。
         #loopの場合は、loopの実装が終わったと同義。
-        target_label =   self._loop_stack[len(self._loop_stack) - 1]
-        target_label.get_all_patterns()
-        
+        target_label =  self._loop_labels[len(self._loop_labels) - 1]
+        loops = self._convert_loop_pattern(target_label)
+        #patternを適用したloopをtarget_listとlabel_listに追加していく
+        for loop in loops:
+            target_list.append_operation(loop._loop_operation)
+            self._loop_labels.append(loop)
+
         return True
 
     #再帰的にfunction以下にあるfunctionのインスタンス化
@@ -163,9 +168,35 @@ class AST:
         return pattern_def.caller_operation_list
 
     def _convert_loop_pattern(self,loop):
-        return_list = loop
-        return [loop]
-    
+        return_list = []
+        pattern_caller_list = loop.get_all_patterns()
+        pattern_table = self._product_pattern_table(pattern_caller_list)
+        for pattern in pattern_table:
+            tmp_loop = loop.copy()
+            tmp_pattern_caller_list = tmp_loop.get_all_patterns()
+            for i in range(len(tmp_pattern_caller_list)):
+                #pattern[i] == noname Operation
+                tmp_pattern_caller_list[i].replace(pattern[i])
+            return_list.append(tmp_loop)
+        return return_list
+
+    def _product_pattern_table(self,pattern_caller_list):
+        target_list = []
+        for ope in pattern_caller_list:
+            #patternのうち一つを呼ぶもののList
+            nonames_layer = ope.child_operation_list.operation_list
+            #callp1 -> call noname -> call a & callb
+            #             -> call noname -> call c & call e
+            #callp2 -> call noname -> call e & call f
+            #             -> call noanme -> call g & call h
+            #producted_table = [calla&callb,calle&callf],[calla&callb,callg&callh]...
+            #これがパターンの一つ
+            target_list.append(nonames_layer)
+        producted_table =  pattern_table.make_pattern_table(target_list)
+        return producted_table
+
+
+
     @property
     def function_list(self):
         return self._function_list
@@ -190,7 +221,11 @@ class Pattern():
         self._used_funcnames = parse_result[1]
         self._operations_list = self._make_operations_list()
         self._used_func_instances = []
-        #こいついるか？
+        #list of operation list such like
+        #operation(call noname).child_opelist -> [operation(call funca),operation(call funcb)]
+        #operation(call noname).child_opelist -> [operation(call funcc),operation(call funcd)]
+        #So call nonames layer -> call funcs layer
+        #call noanmes layer equal exclusive of its each members
         self._caller_operation_list = self._make_caller_operation_list()
 
     def _make_operations_list(self):
@@ -301,16 +336,22 @@ class Loop():
         self._iteratable_operation_list = opelist.get_iteratables_recursively()
         return True
 
+    #このLoopの下にある全てのpatternを呼ぶoperationをlistにして返す
     def get_all_patterns(self):
+        return_list = []
         opelist = self._loop_operation.child_operation_list
-        tmp_caller_list = opelist.get_callers_recursively()
-        for caller in tmp_caller_list:
+        all_callers  = opelist.get_callers_recursively()
+        for caller in all_callers:
             if caller.executable_operation["call_pattern_name"] != "":
-                self._pattern_operation_list.append(caller)
-        return True
+                return_list.append(caller)
+        return return_list
 
     def copy(self):
         return copy.deepcopy(self)
+
+    @property
+    def loop_operation(self):
+        return self._loop_operation
 
 #astのCompossiter。Iteratorを提供する。
 #iteratorが提供するのは、executable_operation

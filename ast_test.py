@@ -13,7 +13,7 @@ func2 = {
 }
 pattern1 = {
     "name" : "p1"
-    ,"pattern" : "funca funcb"
+    ,"pattern" : "(funca funcb){1,2}"
 }
 pattern2 ={
     "name" : "p2"
@@ -56,11 +56,11 @@ print(ast._function_list[0].operation_list[2]._child_operation_list)
 print(ast._pattern_list)
 print(ast.operation_main.operation_list)
 ast_iterator = AST_Iterator(ast)
-print(ast_iterator.iterate())
-print(ast_iterator.iterate())
-print(ast_iterator.iterate())
-print(ast_iterator.iterate())
-print(ast_iterator.iterate())
+#print(ast_iterator.iterate())
+#print(ast_iterator.iterate())
+#print(ast_iterator.iterate())
+#print(ast_iterator.iterate())
+#print(ast_iterator.iterate())
 
 #Loop test
 ope_1obj = Operation({"action" : "click","object" : "something"})
@@ -111,20 +111,39 @@ show_callers_iteratables(opelist1)
 loop = Loop(loop_ope1)
 show_callers_iteratables(opelist1)
 
-#loopとpattern_listを受け取って、その下に在るpatternの直積の数だけloopを増やして、listにして返す
-#interface
-#@param loop Loop
-#@param pattern_list list of {"id" : operation_id,"pattern" : pattern_name}
-#@return list of Loop
-#def convert_pattern_loop(loop,pattern_list):
-
-
-#convert_pattern_loop(loop)
-
-
-"""loop.get_all_iteratables()
-show_operation_list(loop._iteratable_operation_list)
-loop.make_pattern_table()
-for tmp in loop._iteration_table:
-        print(tmp)
-"""
+print("pattern_loop conversion test.")
+pattern1 = {
+    "name" : "p1"
+    ,"pattern" : "(funca funcb|funcc funcd)"
+}
+pattern2 = {
+    "name" : "p2"
+    ,"pattern" : "(funce funcf|funcg funch)"
+}
+p1 = Pattern(pattern1["name"],pattern1["pattern"])
+p2 = Pattern(pattern2["name"],pattern2["pattern"])
+ope_p1 = Operation({"action":"call","pattern":"p1"})
+ope_p2 = Operation({"action":"call","pattern":"p2"})
+ope_p1.child_operation_list = p1.caller_operation_list
+ope_p2.child_operation_list = p2.caller_operation_list
+loop_ope = Operation({"action":"loop"})
+loop_ope.child_operation_list = Operation_List()
+loop_ope.child_operation_list.append_operation(ope_p1)
+loop_ope.child_operation_list.append_operation(ope_p2)
+loop_pattern_1 = Loop(loop_ope)
+pattern_callers = loop_pattern_1.get_all_patterns()
+ptable_1 = ast._product_pattern_table(pattern_callers)
+print((p1.pattern_list))
+print((p2.pattern_list))
+print(ptable_1)
+i = 0
+for p in ptable_1:
+    print("p" + str(i))
+    j = 0
+    for noname_ope in p:
+        print("ope" + str(j))
+        for ope in noname_ope.child_operation_list.operation_list:
+            print(ope.executable_operation["call_function_name"])
+        j += 1
+    i += 1
+print(ast._convert_loop_pattern(loop_pattern_1))

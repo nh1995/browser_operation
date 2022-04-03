@@ -218,6 +218,11 @@ class Operation:
         self._is_pattern_appliled = False
         self._objects = []
 
+    #渡されたOperationで中身を入れ替える
+    def replace(self,operation):
+        for key in self.__dict__.keys():
+            self.__setattr__(key,operation.__getattribute__(key))
+
     @property
     def operation_core(self):
         return self._operation_core
