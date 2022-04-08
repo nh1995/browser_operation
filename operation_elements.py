@@ -336,6 +336,10 @@ class Operation_List:
         #indexを返す
         return len(self.operation_list) - 1
 
+    def has_index(self,index):
+        return (index >= 0 and len(self._operation_list) > index)
+
+
     #operationを一つ取り出す
     #interface
     #@param index いくつめのOperationか

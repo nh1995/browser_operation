@@ -1,5 +1,10 @@
 from  __ast import *
 from operation_elements import *
+import yaml
+
+def get_ast_template():
+    return  {"Functions": [] , "Patterns" : [],"Main" : []}
+
 
 print("start ast_test")
 
@@ -56,11 +61,12 @@ print(ast._function_list[0].operation_list[2]._child_operation_list)
 print(ast._pattern_list)
 print(ast.operation_main.operation_list)
 ast_iterator = AST_Iterator(ast)
-#print(ast_iterator.iterate())
-#print(ast_iterator.iterate())
-#print(ast_iterator.iterate())
-#print(ast_iterator.iterate())
-#print(ast_iterator.iterate())
+"""print(ast_iterator.iterate())
+print(ast_iterator.iterate())
+print(ast_iterator.iterate())
+print(ast_iterator.iterate())
+print(ast_iterator.iterate())
+"""
 
 #Loop test
 ope_1obj = Operation({"action" : "click","object" : "something"})
@@ -89,7 +95,7 @@ p2 = Pattern("p2","funca{4}")
 loop_ope1 = Operation({"action": "loop"})
 loop_ope1.child_operation_list = opelist1
 
-loop = Loop(loop_ope1)
+
 
 def show_callers_iteratables(opelist):
     print("show iteratables")
@@ -147,3 +153,145 @@ for p in ptable_1:
         j += 1
     i += 1
 print(ast._convert_loop_pattern(loop_pattern_1))
+
+ast_struct_2 = get_ast_template()
+funca_def = {
+    "name" : "funca"
+    ,"main" : []
+}
+funcb_def = {
+    "name" : "funcb"
+    ,"main" : []
+}
+funcc_def = {
+    "name" : "funcc"
+    ,"main" : []
+}
+funcd_def = {
+    "name" : "funcd"
+    ,"main" : []
+}
+pattern1 = {
+    "name" : "p1"
+    ,"pattern" : "(funca|funcb)"
+}
+pattern2 ={
+    "name" : "p2"
+    ,"pattern" : "(funcc|funcd)"
+}
+call_funca = {"action" : "call" , "func" : "funca"}
+call_funcb = {"action" : "call" , "func" : "funcb"}
+call_funcc = {"action" : "call" , "func" : "funcc"}
+call_funcd = {"action" : "call" , "func" : "funcd"}
+funca_ope = {"action" : "click" , "object" : "do funca"}
+funcb_ope = {"action" : "click" , "object" : "do funcb"}
+funcc_ope = {"action" : "click" , "object" : "do funcc"}
+funcd_ope = {"action" : "click" , "object" : "do funcd"}
+funca_def["main"].append(funca_ope)
+funcb_def["main"].append(funcb_ope)
+funcc_def["main"].append(funcc_ope)
+funcd_def["main"].append(funcd_ope)
+call_p1 = {"action" : "call", "pattern" : "p1"}
+call_p2 = {"action" : "call", "pattern" : "p2"}
+loop_p1p2 = {"loop" : []}
+iteratable_operation = {"action" : "click", "object" : ["iter1","iter2"]}
+noarmal_operation = {"action" : "click" , "object" : "obj1"}
+loop_p1p2["loop"].append(noarmal_operation)
+loop_p1p2["loop"].append(call_p1)
+loop_p1p2["loop"].append(call_p2)
+loop_p1p2["loop"].append(iteratable_operation)
+ast_struct_2["Main"].append(noarmal_operation)
+ast_struct_2["Main"].append(loop_p1p2)
+ast_struct_2["Main"].append(noarmal_operation)
+ast_struct_2["Functions"].append(funca_def)
+ast_struct_2["Functions"].append(funcb_def)
+ast_struct_2["Functions"].append(funcc_def)
+ast_struct_2["Functions"].append(funcd_def)
+ast_struct_2["Patterns"].append(pattern1)
+ast_struct_2["Patterns"].append(pattern2)
+
+def print_recursively(operation_list):
+    print("start print recursiverly")
+    ope_list_stack = []
+    progress_stack = []
+    i = 0
+    current_list = operation_list
+    while True:
+        if i >= len(current_list.operation_list):
+            if len(ope_list_stack) > 0:
+                current_list = ope_list_stack.pop()
+                i = progress_stack.pop()
+                print("recursive_end")
+                continue
+            else:
+                break
+
+        ope = current_list.operation_list[i]
+        print("ope" + str(i))
+        print(ope.executable_operation)
+        i += 1
+        if ope.child_operation_list is not None:
+            ope_list_stack.append(current_list)
+            progress_stack.append(i)
+            i = 0
+            current_list = ope.child_operation_list
+            print("recursive")
+
+ast_pattern_test = AST(ast_struct_2)
+main_list = ast_pattern_test.operation_main.operation_list
+print(main_list)
+for operation in main_list:
+    print(operation.executable_operation)
+print(ast_pattern_test._loop_labels)
+print_recursively(ast_pattern_test.operation_main)
+for ope in main_list:
+    print("In main loop")
+    print(ope.executable_operation)
+    if ope.executable_operation["action"] == "loop":
+        for looped_ope in ope.child_operation_list.operation_list:
+            print("In looped clause")
+            print(looped_ope.executable_operation)
+iter = AST_Iterator(ast_pattern_test)
+#print(iter.iterate().executable_operation)
+yml = """
+Functions:
+    - name : "funca"
+      main : 
+        - action : "click"
+          object : ["funca object","funca iterobject"]
+    - name : "funcb"
+      main : 
+        - action : "click"
+          object  : "funcb object"
+    - name : "funcc"
+      main : 
+        - action : "click"
+          object : "funcc object"
+    - name : "funcd"
+      main : 
+        - action : "click"
+          object : ["funcd object","funcd iterobject"]
+Patterns :
+    - name : "p1"
+      pattern : "(funca|funcb)"
+    - name : "p2"
+      pattern : "(funcc|funcd)"
+Main :
+    - action : "click"
+      object : "click1"
+    - loop :
+      - action : "call"
+        pattern : "p1"
+      - a : "call"
+        p : "p2"
+      - a : "click"
+        o : ["iter1","iter2"]
+    - a : "click"
+      o : ["iter3","iter4"]
+"""
+yml_ope=yaml.safe_load(yml)
+yml_ast_test = AST(yml_ope)
+loop_sample = Loop(yml_ast_test.operation_main.operation_list[1])
+loop_sample.get_all_iteratables()
+loop_sample.make_pattern_table()
+print(loop_sample.iteration_table)
