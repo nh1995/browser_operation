@@ -1,0 +1,25 @@
+Functions:
+    - name : "funca"
+      main : 
+         - {action : "click",object : ["funca object","funca iterobject"]}
+    - name : "funcb"
+      main : 
+        - {action : "click", object  : "funcb object"}
+    - name : "funcc"
+      main : 
+        - {action : "click", object : "funcc object"}
+    - name : "funcd"
+      main : 
+        - {action : "click", object : ["funcd object","funcd iterobject"]}
+Patterns :
+    - name : "p1"
+      pattern : "(funca|funcb)"
+    - name : "p2"
+      pattern : "(funcc|funcd)"
+Main :
+  - {action : "click",object : "click1"}
+  - loop :
+          - {action : "call", pattern : "p1"}
+          - {a : "call", p : "p2"}
+          - {a : "click", o : ["iter1","iter2"]}
+  - {a : "click", o : ["iter3","iter4"]}

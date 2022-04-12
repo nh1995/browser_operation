@@ -21,6 +21,8 @@ class  AST:
                         
         def  _register_functions(self):
                 registered_function_num  =  0
+                if "Functions" not in self._yaml_operation_file:
+                        return True
                 functions  =  self._yaml_operation_file["Functions"]
                 tmp_function  =  None
                 #最初に関数名だけ登録
@@ -48,6 +50,8 @@ class  AST:
 
         def  _register_patterns(self):
                 registered_pattern_num  =  0
+                if "Patterns" not in self._yaml_operation_file:
+                        return True
                 patterns  =  self._yaml_operation_file["Patterns"]
                 tmp_pattern  =  None
                 for  pattern  in  patterns:
@@ -60,7 +64,6 @@ class  AST:
 
         def  _get_function(self,func_name):
                 return_func  =  None
-                print(func_name)
                 for  target_func  in  self._function_list:
                         if  target_func.function_name  ==  func_name:
                                 return_func  =  target_func
@@ -210,7 +213,6 @@ class  AST:
 
                         ope = current_list.operation_list[i]
                         ope.operation_id = total_number
-                        print(ope.operation_id)
                         total_number += 1
                         i += 1
                         if ope.child_operation_list is not None:
@@ -219,6 +221,8 @@ class  AST:
                                 i = 0
                                 current_list = ope.child_operation_list
 
+        def new_iterator(self):
+                return AST_Iterator(self)
 
         @property
         def  loop_labels(self):
@@ -308,10 +312,12 @@ class  Loop():
                 # ,}
                 #valはexecutable_operation["object"][0]、みたいに選択すべきobjectのインデックス
                 #なんでope_idに対して配列で持つかって言うと、objectが複数statusが複数ならそこでも掛け合わせるから
-                self._iteration_table  =  [[]]
+                self._iteration_table  =  {}
                 self._current_loop_times = 0
+                self._max_loop_times = 0
                 #別にどっからがloopのはじまりか識別できればいいから、参照持っとく
                 self._loop_operation  =  loop_operation
+                self.get_all_iteratables()
 
         #Loop直下の要素を全て確認して、直積表を作る
         #interface
@@ -336,6 +342,7 @@ class  Loop():
                 for  operation  in  self._iteratable_operation_list:
                         target_list.extend(self._get_operation_iteration_dict(operation))
                 producted_table  =    pattern_table.make_pattern_table(target_list)
+                self._max_loop_times = len(producted_table)
                 self._iteration_table =  self._conv_producted_pattern_to_dict(producted_table)
                 return  True
 
@@ -359,14 +366,10 @@ class  Loop():
         #@param 2dime list
         #@return dict
         def _conv_producted_pattern_to_dict(self,producted_table):
-                print(producted_table)
-                return_dict = {}
+                return_dict = self._iteration_table
                 #idが被ってたら一緒のdictに入れる
                 for  tmp_list in  producted_table:
                         for  tmp_dict  in  tmp_list:
-                                #idがreturn_dictにまだ登録されていない場合は登録
-                                if  not  tmp_dict["id"]  in  return_dict:
-                                        return_dict[tmp_dict["id"]]  =  []
                                 return_dict[tmp_dict["id"]].append({"key"  :  tmp_dict["key"],"idx"  :  tmp_dict["idx"]})
                 return return_dict
 
@@ -374,6 +377,8 @@ class  Loop():
         def  get_all_iteratables(self):
                 opelist  =  self._loop_operation.child_operation_list
                 self._iteratable_operation_list  =  opelist.get_iteratables_recursively()
+                for operation in self._iteratable_operation_list:
+                        self._iteration_table[str(operation.operation_id)] = []
                 return  True
 
         #このLoopの下にある全てのpatternを呼ぶoperationをlistにして返す
@@ -401,13 +406,29 @@ class  Loop():
         def iteration_table(self):
                 return self._iteration_table
 
+        def addup_loop_times(self):
+                if self._current_loop_times == 0:
+                        self.make_pattern_table()
+                self._current_loop_times += 1
+                return self._current_loop_times
+
+        def has_next(self):
+                return self._max_loop_times > self._current_loop_times
+
         def get_iteration_instruction(self,operation_id):
-                return_dict = None
-                if self.iteration_table is not None:
-                        current_instruction = self._iteration_table[self._current_loop_times]
-                        if operation_id in curent_instruction:
-                                return_dict = current_instruction[operation_id]
-                return return_dict
+                return_list = []
+                if operation_id in self.iteration_table:
+                        instruction = self.iteration_table[operation_id]
+                        if len(instruction) < 1:
+                                target_operation = None
+                                for operation in self._iteratable_operation_list:
+                                        if str(operation.operation_id) == operation_id:
+                                                target_operation = operation
+                                for  iteratable_key  in  target_operation.iteratable_keys:
+                                        return_list.append({"key" : iteratable_key,"idx" : 0})
+                        else:
+                                return_list.append(instruction[self._current_loop_times])
+                return return_list
 
 #astのCompossiter。Iteratorを提供する。
 #iteratorが提供するのは、executable_operation
@@ -420,6 +441,7 @@ class  AST_Iterator():
                 self._operation_list_stack  =  []
                 self._loop_stack = []
                 self._progress_stack  =  []
+                self._previous_operation = None
                 
         def  iterate_get_operation_list(self):
                 #基本的にOperation_List(&its  SuperSets)に対して操作を行うかな？
@@ -432,73 +454,97 @@ class  AST_Iterator():
 
                 return_operation  = target_ope_list[operation_index]
                 self._current_progress  +=  1
-                print("progress  "  +  str(operation_index))
 
                 #取得したOperationが子を持っている場合
-                if return_operatin.child_operation_list is not None:
+                if return_operation.child_operation_list is not None:
                         #loopだったらlooplabelをpush
                         if return_operation.executable_operation["action"] == "loop":
-                                self._loop_stack.append(Loop(return_operation))
+                                latest_loop = self._get_latest_loop()
+                                #最新のループのOperationと一致したら、既にLoopがインスタンス化されてる==loopのn周目
+                                if latest_loop is None or latest_loop.loop_operation != return_operation:
+                                        self._loop_stack.append(Loop(return_operation))
                         self._append_operation_list_stacks(self._current_operation_list,self._current_progress)
                         self._current_operation_list  =  return_operation.child_operation_list.operation_list
                         self._current_progress  =  0
-
+                self._previsous_operation = return_operation
                 return return_operation
 
         def iterate_get_executable_operation(self):
                 return_dict = None
-                operation = self._iterate_get_operation_list()
+                operation = self.iterate_get_operation_list()
                 if operation is not None:
-                        return_dict = self._get_loop_applied_executble_operation(operation)
+                        return_dict = self._get_loop_applied_executable_operation(operation)
                 return return_dict
 
         def _get_loop_applied_executable_operation(self,operation):
-                return_dict = operation.executable_operation
+                return_dict = None
                 loop_stack_len = len(self._loop_stack)
                 #Loopの何回目で何を選ぶかの指示テーブル
-                iteration_table = None
+                is_loop_applieable = False
+                loop_instruction = None
                 #一つでもloopがあれば、loopの影響下にある
                 if loop_stack_len > 0:
                         current_loop = self._loop_stack[loop_stack_len - 1]
                         iteration_table = current_loop.iteration_table
                         loop_instruction = current_loop.get_iteration_instruction(str(operation.operation_id))
-                        return_dict
+                        if loop_instruction is not None:
+                                is_loop_applieable = True
+                if is_loop_applieable:
+                        return_dict = self._apply_loop_instruction_to_operation(loop_instruction,operation)
                 else:
                         return_dict = operation.executable_operation
-
-
+                        return_dict["objects"] = return_dict["objects"][0]
                 return return_dict
-                                
+
+        def _apply_loop_instruction_to_operation(self,loop_instruction,operation):
+                return_dict = copy.deepcopy(operation.executable_operation)
+                for instruction in loop_instruction:
+                        return_dict[instruction["key"]] = operation.executable_operation[instruction["key"]][0]
+                return return_dict
 
         def _pop_operation_list_stacks(self):
                 self._current_operation_list  =  self._operation_list_stack.pop()
                 self._current_progress  =  self._progress_stack.pop()
                 return True
 
-        def _append_operation_list_stacks(self,appended_opeartion_list,appended_index):
-                self._operation_list_stack.append(appened_operation_list)
+        def _append_operation_list_stacks(self,appended_operation_list,appended_index):
+                self._operation_list_stack.append(appended_operation_list)
                 self._progress_stack.append(appended_index)
                 return True
 
         def _is_prev_operation_loop(self):
                 return (self._current_operation_list[self._current_progress - 1].executable_operation["action" ] == "loop")
 
+        def _get_latest_operation_list_and_progress(self):
+                return (self._operation_list_stack[len(self._operation_list_stack) - 1],self._progress_stack[len(self._progress_stack) - 1])
+
         def _get_target_operation_list(self):
                 return_operation_list = None
 
-                #対象としているOperation_Listがおわっていた場合
-                if self._current_operation.has_index(self._current_progress):
-                        return_operation_list = self._current_operation_list.operation_list
+                #対象としているOperation_Listがおわっていない場合
+                if len(self._current_operation_list) > self._current_progress:
+                        return_operation_list = self._current_operation_list
                 else:
                         #stackからopelistを取り出す。終わってないやつにあたるまで繰り返す
                         while  len(self._operation_list_stack)  >  0:
                                 self._pop_operation_list_stacks()
-                                #前のoperationがloopだったら、loopは終わったということなので、loop_stackからpop
-                                if self._is_prev_operation_loop():
-                                        self._loop_stack.pop()
+                                #loopの影響下にある場合は、loopを終了させるかどうかをみる
+                                if len(self._loop_stack) > 0 and self._is_prev_operation_loop():
+                                        latest_loop = self._get_latest_loop()
+                                        latest_loop.addup_loop_times()
+                                        if latest_loop.has_next():
+                                                #progressを1つ元に戻せば、loopのOperationに戻る(先に進まない)
+                                                self._current_progress -= 1
+                                        else:
+                                                #loopがおわったら、stackから削除
+                                                self._loop_stack.pop()
                                 #progressがopelistのlenを超えていない == まだそのリストに実行すべきものがある
-                                if  self._current_operation.has_index(self._current_progress):
-                                        return_operation_list = self._current_operation_list.operation_list
+                                if len(self._current_operation_list) > self._current_progress:
+                                        return_operation_list = self._current_operation_list
                                         break
 
                 return return_operation_list
+
+        def _get_latest_loop(self):
+                loop_stack_len = len(self._loop_stack)
+                return self._loop_stack[loop_stack_len - 1] if loop_stack_len > 0 else None

@@ -339,6 +339,11 @@ class Operation_List:
     def has_index(self,index):
         return (index >= 0 and len(self._operation_list) > index)
 
+    def get_first_operation(self):
+        return self._operation_list[0]
+    
+    def get_last_opeartion(self):
+        return self._operation_list[len(self._operation_list) - 1]
 
     #operationを一つ取り出す
     #interface
