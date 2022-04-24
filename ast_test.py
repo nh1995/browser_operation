@@ -17,6 +17,10 @@ print(loop_sample.get_iteration_instruction("9"))
 loop_sample.addup_loop_times()
 print(loop_sample.get_iteration_instruction("9"))
 
+yml = open("sample.yml").read()
+yml_ope=yaml.safe_load(yml)
+yml_ast_test = AST(yml_ope)
+yml_ast_iterator = AST_Iterator(yml_ast_test)
 
 diction = yml_ast_iterator.iterate_get_executable_operation()
 while diction is not None:

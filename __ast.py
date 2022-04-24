@@ -1,4 +1,6 @@
-import  operation_elements,yaml,copy,regex_parser,pattern_table
+import  yaml,copy,regex_parser,pattern_table
+import operation_elements
+from operation_definition import *
 #Inter  operation_elements  なclassをまとめたもの。
 #要は、Operation_elementsのclassのcompositterのクラス
 #ymlObjectから命令構造体を構築する
@@ -56,7 +58,7 @@ class  AST:
                 tmp_pattern  =  None
                 for  pattern  in  patterns:
                         #Pattern内で何のfunctionを呼ぶかとかはinitでやってくれる
-                        tmp_pattern  =  Pattern(pattern["name"],pattern["pattern"])
+                        tmp_pattern  =  operation_elements.Pattern(pattern["name"],pattern["pattern"])
                         self._pattern_list.append(tmp_pattern)
                         registered_pattern_num  +=  1
 
@@ -240,67 +242,6 @@ class  AST:
         def  operation_main(self):
                 return  self._operation_main
 
-#Compositter  of  Operation_List
-#patternは、複数のLoopに実行前解析で直せるので実行前解析で直す
-#本当はこれはトランスパイラを作って直すのが正しいかも
-class  Pattern():
-        def  __init__(self,pattern_name,pattern_string):
-                self._pattern_name  =  pattern_name
-                self._pattern_string  =  pattern_string
-                parse_result  =  self._parse_pattern()
-                self._pattern_list  =  parse_result[0]
-                self._used_funcnames  =  parse_result[1]
-                self._operations_list  =  self._make_operations_list()
-                self._used_func_instances  =  []
-                #list  of  operation  list  such  like
-                #operation(call  noname).child_opelist  ->  [operation(call  funca),operation(call  funcb)]
-                #operation(call  noname).child_opelist  ->  [operation(call  funcc),operation(call  funcd)]
-                #So  call  nonames  layer  ->  call  funcs  layer
-                #call  noanmes  layer  equal  exclusive  of  its  each  members
-                self._caller_operation_list  =  self._make_caller_operation_list()
-
-        def  _make_operations_list(self):
-                result_list  =  []
-                for  pattern  in  self._pattern_list:
-                        tmp_operation_list  =  operation_elements.Operation_List()
-                        for  funcname  in  pattern:
-                                ope  =  operation_elements.Operation({"action"  :  "call",  "func"  :  funcname})
-                                tmp_operation_list.append_operation(ope)
-                        caller_operation  =  operation_elements.Operation({"action"  :  "call"})
-                        caller_operation.child_operation_list  =  tmp_operation_list
-                        result_list.append(caller_operation)
-
-                return  result_list
-
-        def  _make_caller_operation_list(self):
-                tmp_opelist  =  operation_elements.Operation_List()
-                for  operation  in  self._operations_list:
-                        tmp_opelist.append_operation(operation)
-                return  tmp_opelist
-
-        def  _parse_pattern(self):
-                return    regex_parser.parse_pattern(self._pattern_string)
-
-        @property
-        def  pattern_name(self):
-                return  self._pattern_name
-
-        @property
-        def  pattern_list(self):
-                return  self._pattern_list
-
-        @property
-        def  used_funcnames(self):
-                return  self._used_funcnames
-
-        @property
-        def  operations_list(self):
-                return  self._operations_list
-
-        @property
-        def  caller_operation_list(self):
-                return  copy.deepcopy(self._caller_operation_list)
-
 #ラベル。どっからどこまでとか、その影響範囲には何が在るとかとかを持つ
 #これAST_Iterator内で使われるクラス。AST側では別に使わない(=実行時情報)
 #Compositter  of  Operation(_List?のほうが良い？)
@@ -443,7 +384,7 @@ class  AST_Iterator():
                 self._progress_stack  =  []
                 self._previous_operation = None
                 
-        def  iterate_get_operation_list(self):
+        def  iterate_get_operation(self):
                 #基本的にOperation_List(&its  SuperSets)に対して操作を行うかな？
                 return_operation  =  None
                 target_ope_list  =  self._get_target_operation_list()
@@ -471,7 +412,7 @@ class  AST_Iterator():
 
         def iterate_get_executable_operation(self):
                 return_dict = None
-                operation = self.iterate_get_operation_list()
+                operation = self.iterate_get_operation()
                 if operation is not None:
                         return_dict = self._get_loop_applied_executable_operation(operation)
                 return return_dict
@@ -492,14 +433,16 @@ class  AST_Iterator():
                 if is_loop_applieable:
                         return_dict = self._apply_loop_instruction_to_operation(loop_instruction,operation)
                 else:
-                        return_dict = operation.executable_operation
-                        return_dict["objects"] = return_dict["objects"][0]
+                        return_dict = copy.deepcopy(operation.executable_operation)
+                for key in IS_LISTABLE_KEY_DICT.keys():
+                        if key in return_dict and len(return_dict[key]) > 0:
+                                return_dict[key] = return_dict[key][0]
                 return return_dict
 
         def _apply_loop_instruction_to_operation(self,loop_instruction,operation):
                 return_dict = copy.deepcopy(operation.executable_operation)
                 for instruction in loop_instruction:
-                        return_dict[instruction["key"]] = operation.executable_operation[instruction["key"]][0]
+                        return_dict[instruction["key"]] = [operation.executable_operation[instruction["key"]][instruction["idx"]]]
                 return return_dict
 
         def _pop_operation_list_stacks(self):

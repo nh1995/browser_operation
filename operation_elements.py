@@ -1,21 +1,9 @@
-import re,yaml,copy,io,regex_parser
+import re,copy,io,regex_parser
+from operation_definition import *
 
 #staticな情報しか持たないclassたちです。
 #情報が完成しているかいないか(パターンが適用されているかどうか)はあるけど。
 #つまり、ASTの要素として完成しきっていないよって情報は出す必要が在る。実行時解析が在るから。
-KEY_ACTION = "action"
-KEY_OBJECT = "objects"
-KEY_OBJECT_IS_SELECTOR = "is_objects_selector"
-KEY_ACTION_TO = "action_to_list"
-KEY_OBJECT_STATUS = "object_statuses"
-KEY_STATUS_IS_PREDICATE = "is_statuses_predicate"
-KEY_TIMES = "times"
-KEY_ITERATABLE = "iteratable"
-KEY_LABEL = "label"
-KEY_FUNCTION = "call_function_name"
-KEY_PATTERN = "call_pattern_name"
-KEY_VALUE = "value"
-KEY_SECOND = "second"
 
 #入力可能なキーと、Operation_Coreクラスのメンバ変数の対応一覧
 OPERATION_KEY_REF_DICT = {
@@ -47,69 +35,6 @@ OPERATION_KEY_REF_DICT = {
     ,"VAL" : KEY_VALUE
 }
 
-IS_LISTABLE_KEY_DICT = {
-    KEY_OBJECT : True
-    ,KEY_OBJECT_STATUS : True
-    ,KEY_ACTION_TO : True
-    ,KEY_VALUE : True
-}
-
-def valid_action(action):
-    usable_actions =  ["SELECT","CLICK","DRAG","CALL","LOOP","INPUT","WAIT","RCLICK","DBLCLICK","UPLOAD"]
-    is_usable = False
-    uppered_action = action.upper()
-    for usable_action in usable_actions:
-        if uppered_action == usable_action:
-            is_usable = True
-            break
-    return is_usable
-
-def is_str(value):
-    return isinstance(value,str)
-
-def is_bool(value):
-    return isinstance(value,bool)
-
-def is_str_or_strlist(value):
-    is_list = False
-    is_all_elm_str = True
-    if isinstance(value,list):
-        is_list = True
-    if is_list:
-        for elm in value:
-            if not isinstance(elm,str):
-                is_all_elm_str = False
-    else:
-        if not isinstance(value,str):
-            is_all_elm_str = False
-    return is_all_elm_str
-
-def is_int(value):
-    is_int = False
-    try:
-        int(value)
-        is_int = True
-    except:
-        is_int = False
-    return is_int
-
-#関数への参照を持つので、それぞれ引数を渡して実行
-KEY_VALUES_VALID_FUNC_DICT = {
-    KEY_ACTION : valid_action
-    ,KEY_OBJECT : is_str_or_strlist
-    ,KEY_OBJECT_IS_SELECTOR : is_bool
-    ,KEY_OBJECT_STATUS : is_str_or_strlist
-    ,KEY_ACTION_TO : is_str_or_strlist
-    ,KEY_STATUS_IS_PREDICATE : is_bool
-    ,KEY_TIMES : is_int
-    ,KEY_ITERATABLE : is_bool
-    ,KEY_LABEL : is_str
-    ,KEY_FUNCTION : is_str
-    ,KEY_PATTERN : is_str
-    ,KEY_SECOND : is_int
-    ,KEY_VALUE : is_str_or_strlist
-}
-     
 #なんというかoperationの内容物
 #指示ファイルに記載のOperationの内容をクラス形式に変換して提供する。
 #指示ファイルに記載のOperation1つに対して、完全に同等か、SuperSetとなるように情報を保存する
@@ -401,3 +326,64 @@ def print_class_members(self):
             string += "|----" + key + "=" + str(val) + "\n"
 
     return string
+
+    #Compositter  of  Operation_List
+#patternは、複数のLoopに実行前解析で直せるので実行前解析で直す
+#本当はこれはトランスパイラを作って直すのが正しいかも
+class  Pattern():
+        def  __init__(self,pattern_name,pattern_string):
+                self._pattern_name  =  pattern_name
+                self._pattern_string  =  pattern_string
+                parse_result  =  self._parse_pattern()
+                self._pattern_list  =  parse_result[0]
+                self._used_funcnames  =  parse_result[1]
+                self._operations_list  =  self._make_operations_list()
+                self._used_func_instances  =  []
+                #list  of  operation  list  such  like
+                #operation(call  noname).child_opelist  ->  [operation(call  funca),operation(call  funcb)]
+                #operation(call  noname).child_opelist  ->  [operation(call  funcc),operation(call  funcd)]
+                #So  call  nonames  layer  ->  call  funcs  layer
+                #call  noanmes  layer  equal  exclusive  of  its  each  members
+                self._caller_operation_list  =  self._make_caller_operation_list()
+
+        def  _make_operations_list(self):
+                result_list  =  []
+                for  pattern  in  self._pattern_list:
+                        tmp_operation_list  =  Operation_List()
+                        for  funcname  in  pattern:
+                                ope  =  Operation({"action"  :  "call",  "func"  :  funcname})
+                                tmp_operation_list.append_operation(ope)
+                        caller_operation  =  Operation({"action"  :  "call"})
+                        caller_operation.child_operation_list  =  tmp_operation_list
+                        result_list.append(caller_operation)
+
+                return  result_list
+
+        def  _make_caller_operation_list(self):
+                tmp_opelist  =  Operation_List()
+                for  operation  in  self._operations_list:
+                        tmp_opelist.append_operation(operation)
+                return  tmp_opelist
+
+        def  _parse_pattern(self):
+                return    regex_parser.parse_pattern(self._pattern_string)
+
+        @property
+        def  pattern_name(self):
+                return  self._pattern_name
+
+        @property
+        def  pattern_list(self):
+                return  self._pattern_list
+
+        @property
+        def  used_funcnames(self):
+                return  self._used_funcnames
+
+        @property
+        def  operations_list(self):
+                return  self._operations_list
+
+        @property
+        def  caller_operation_list(self):
+                return  copy.deepcopy(self._caller_operation_list)

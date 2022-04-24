@@ -1,17 +1,14 @@
-・action "dblclick" "rclick" "wait" とか諸々ついか　あとでいいけど
-・ast_iteratorの作成
+・Operationにif ~ existを追加（というか、wait for ~ていう感じでとりあえず良いんじゃ？）
+・セッション特有の値入力
 ・make_function_instanceの無限ループ対策
-・runtimeの作成
-・main_routineの作成（ついにブラウザ操作ライブラリを使うタイミングが…！）
-・yamlの受け取り
-ここまでを3/21中に終わらせたい…できなくても再来週の休日中には…！
 ・リファクタリング
     特にregex_patternのリファクタリング
 ・デバッグ削除
 ・テストの作成
 ・__ast.pyをast.pyにしたい
 ・READMEのさくせい
-今月中までにやろう
+
+
 
 指示書設計
     選択できるオブジェクトと

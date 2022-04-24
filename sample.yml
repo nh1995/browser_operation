@@ -1,3 +1,14 @@
 Main:
     - {"action" : "click","object" : "Sign in"}
-
+    - {"A" : "input","O" : "Login", "VAL" : "developer"}
+    - {"A" : "input","O" : "Password", "VAL" : "developer"}
+    - {"A" : "click","O" : "Login"}
+    - {"A" : "click","O" : "プロジェクト"}
+    - "loop":
+        - {"A" : "click","O" : "チケット"}
+        - {"A" : "click","O" : "新しいチケット"}
+        - {"A" : "wait","O" : "作成"}
+        - {"A" : "input","O" : "題名" , "VAL" : "新しいバグ"}
+        - {"A" : "select","O" : "ステータス" , "VAL" : ["新規","進行中","解決"]}
+        - {"A" : "click","O" : "作成"}
+        - {"A" : "wait","O" : "関連するチケット"}

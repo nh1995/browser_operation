@@ -5,6 +5,7 @@ from executor import Executor
 import sys
 import yaml
 import time
+import traceback
 
 if __name__ == "__main__":
         filename = sys.argv[1]
@@ -14,7 +15,14 @@ if __name__ == "__main__":
         helium.start_firefox("https://my.redmine.jp/demo/")
         operation = runtime.get_next_operation()
         while operation is not None:
-                Executor.exec_operation(operation)
+                print(operation)
+                try:
+                        Executor.exec_operation(operation)
+                except Exception as expression:
+                        traceback.print_exc()
+                        print(expression.args)
+                        print(operation)
+                        break
                 operation = runtime.get_next_operation()
         time.sleep(10)
         helium.kill_browser()
